@@ -17,7 +17,8 @@ import { InCareHealthMonitoring } from './components/InCareHealthMonitoring.tsx'
 import { PipelineBoard } from './components/PipelineBoard.tsx';
 import { SystemScopeModal } from './components/SystemScopeModal.tsx';
 import { AdminDashboard } from './components/AdminDashboard.tsx';
-import { Info, Heart, ShieldCheck, PawPrint } from 'lucide-react';
+import { Info, Heart, ShieldCheck } from 'lucide-react';
+import { BrandLogo } from './components/BrandLogo.tsx';
 
 type PublicPetPost = Pick<Animal,
   'id' | 'name' | 'species' | 'breed' | 'age' | 'ageCategory' | 'gender' |
@@ -359,10 +360,7 @@ export default function App() {
       <footer className="border-t border-slate-200 bg-white py-6 mt-12 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded bg-teal-500/10 text-teal-600 flex items-center justify-center">
-              <PawPrint className="w-3.5 h-3.5" />
-            </div>
-            <span className="font-semibold text-slate-700">PAW</span>
+            <BrandLogo tone="light" />
             <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-700">Sample records</span>
           </div>
 

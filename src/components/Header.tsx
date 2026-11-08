@@ -1,6 +1,7 @@
 import React from 'react';
 import { User, UserRole } from '../types.ts';
-import { PawPrint, LogOut, Info } from 'lucide-react';
+import { LogOut, Info } from 'lucide-react';
+import { BrandLogo } from './BrandLogo.tsx';
 
 interface HeaderProps {
   user: User;
@@ -46,12 +47,7 @@ export const Header: React.FC<HeaderProps> = ({
         
         {/* Zone 1: Single element brand wordmark */}
         <div className="flex items-center gap-3 shrink-0">
-          <div className="w-9 h-9 rounded-lg bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400">
-            <PawPrint className="w-5 h-5" />
-          </div>
-          <span className="text-lg font-bold tracking-tight text-white whitespace-nowrap">
-            PAW System
-          </span>
+          <BrandLogo />
           <span className="rounded border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-300">
             Demo
           </span>

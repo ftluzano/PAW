@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { User, UserRole } from '../types.ts';
-import { ShieldCheck, Heart, PawPrint, UserRound, LogIn, UserPlus, Sparkles, AlertCircle, CheckCircle2, ChevronRight, X } from 'lucide-react';
+import { FirebaseError } from '@firebase/app';
+import { getIdTokenResult, signInWithPopup } from '@firebase/auth';
+import { ShieldCheck, Heart, Mail, LogIn, UserPlus, Sparkles, AlertCircle, CheckCircle2, ChevronRight } from 'lucide-react';
 import heroDog from '../assets/images/paw_dog_golden_mix_1794111872445.jpg';
+import { BrandLogo } from './BrandLogo.tsx';
+import { firebaseAuth, googleAuthProvider } from '../firebase.ts';
 
 interface AuthScreenProps {
   onLoginSuccess: (user: User) => void;
@@ -18,11 +22,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
   const [organization, setOrganization] = useState('Hope Haven Animal Rescue');
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Google OAuth modal state
-  const [showGoogleModal, setShowGoogleModal] = useState(false);
-  const [googleSelectedEmail, setGoogleSelectedEmail] = useState('adopter@example.com');
-  const [googleRole, setGoogleRole] = useState<Exclude<UserRole, 'admin'>>('adopter');
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,22 +59,49 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
     }, 400);
   };
 
-  const handleDemoLogin = (selectedEmail: string, selectedRole: Exclude<UserRole, 'admin'>) => {
-    if (!import.meta.env.DEV) return;
+  const handleGoogleSignIn = async () => {
+    setErrorMessage('');
+    if (!firebaseAuth) {
+      setErrorMessage('Google sign-in is not configured. Add the Firebase web app settings to your environment.');
+      return;
+    }
+
     setIsSubmitting(true);
-    setShowGoogleModal(false);
-    setTimeout(() => {
+    try {
+      const credential = await signInWithPopup(firebaseAuth, googleAuthProvider);
+      const token = await getIdTokenResult(credential.user, true);
+      const claims = token.claims;
+      const role: UserRole = claims.admin === true || claims.role === 'admin'
+        ? 'admin'
+        : claims.staff === true || claims.role === 'staff'
+        ? 'staff'
+        : 'adopter';
+      const organization = typeof claims.organization === 'string' ? claims.organization : undefined;
+
+      onLoginSuccess({
+        id: credential.user.uid,
+        name: credential.user.displayName || credential.user.email?.split('@')[0] || 'PAW user',
+        email: credential.user.email || '',
+        role,
+        organization,
+        avatarUrl: credential.user.photoURL || undefined,
+      });
+    } catch (error) {
+      if (error instanceof FirebaseError) {
+        const messages: Record<string, string> = {
+          'auth/popup-closed-by-user': 'Sign-in was cancelled before it finished.',
+          'auth/popup-blocked': 'Your browser blocked the sign-in popup. Allow popups and try again.',
+          'auth/unauthorized-domain': 'Add this site to Firebase Authentication authorized domains.',
+          'auth/operation-not-allowed': 'Enable Google as a sign-in provider in Firebase Authentication.',
+          'auth/network-request-failed': 'Network error. Check your connection and try again.',
+        };
+        setErrorMessage(messages[error.code] || 'Google sign-in failed. Please try again.');
+      } else {
+        setErrorMessage('Google sign-in failed. Please try again.');
+      }
+    } finally {
       setIsSubmitting(false);
-      const user: User = {
-        id: `google-${Date.now()}`,
-        name: selectedRole === 'staff' ? 'Demo Shelter Staff' : 'Demo Adopter',
-        email: selectedEmail,
-        role: selectedRole,
-        organization: selectedRole === 'staff' ? 'Hope Haven Animal Welfare' : undefined,
-        avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-      };
-      onLoginSuccess(user);
-    }, 350);
+    }
   };
 
   const handleQuickDemoLogin = (targetRole: Exclude<UserRole, 'admin'>) => {
@@ -111,19 +137,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
           <img src={heroDog} alt="A rescued dog ready for a new home" className="absolute inset-0 z-0 h-full w-full object-cover opacity-45" />
           <div className="relative z-10">
             {/* PAW Brand Mark */}
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400 shadow-inner">
-                <PawPrint className="w-7 h-7" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-                  PAW
-                  <span className="text-xs uppercase tracking-wider font-semibold text-teal-400 bg-teal-950/80 px-2 py-0.5 rounded border border-teal-800/60">
-                    System
-                  </span>
-                </h1>
-                <p className="text-xs text-slate-400 font-medium">PET ADOPTION AND CARE SYSTEM</p>
-              </div>
+            <div className="mb-6">
+              <BrandLogo size="large" />
             </div>
 
             {/* Core Motto from Page 1 */}
@@ -192,7 +207,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                 {mode === 'login' ? 'Sign In to PAW' : 'Create an Account'}
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Demo mode. Firebase Authentication is not connected yet.
+                Sign in with your Google account.
               </p>
             </div>
 
@@ -219,15 +234,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
             </div>
           </div>
 
-          {/* Demo account picker */}
+          {/* Firebase Google sign-in */}
           <div className="mt-6">
             <button
               type="button"
-              onClick={() => setShowGoogleModal(true)}
-              className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-white hover:bg-slate-100 text-slate-800 font-semibold rounded-xl text-sm border border-slate-300 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-teal-500"
+              onClick={handleGoogleSignIn}
+              disabled={isSubmitting}
+              className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-white hover:bg-slate-100 text-slate-800 font-semibold rounded-xl text-sm border border-slate-300 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-wait disabled:opacity-70"
             >
-              <UserRound className="h-4 w-4 shrink-0" />
-              <span>Choose a demo account</span>
+              {isSubmitting ? (
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-500 border-t-transparent" />
+              ) : (
+                <Mail className="h-4 w-4 shrink-0" />
+              )}
+              <span>Connect to Gmail</span>
             </button>
           </div>
 
@@ -416,117 +436,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
         </div>
       </div>
 
-      {/* Demo account selection */}
-      {showGoogleModal && import.meta.env.DEV && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="auth-modal bg-white text-slate-900 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
-            <button
-              onClick={() => setShowGoogleModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-2 mb-4">
-              <UserRound className="h-5 w-5 text-teal-700" />
-              <h3 className="font-bold text-base text-slate-800">Select a demo account</h3>
-            </div>
-
-            <p className="text-xs text-slate-500 mb-4">
-              Demo-only sign-in. Firebase Authentication is not connected yet.
-            </p>
-
-            <div className="space-y-3 mb-5">
-              <button
-                type="button"
-                aria-pressed={googleSelectedEmail === 'adopter@example.com'}
-                onClick={() => setGoogleSelectedEmail('adopter@example.com')}
-                className={`w-full p-3 rounded-xl border flex items-center justify-between text-left transition-all ${
-                  googleSelectedEmail === 'adopter@example.com'
-                    ? 'border-teal-600 bg-teal-50/70 ring-1 ring-teal-500'
-                    : 'border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-teal-600 text-white font-bold flex items-center justify-center text-xs">
-                    FL
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-900">Demo Adopter</p>
-                    <p className="text-[11px] text-slate-500">adopter@example.com</p>
-                  </div>
-                </div>
-                {googleSelectedEmail === 'adopter@example.com' && (
-                  <CheckCircle2 className="w-4 h-4 text-teal-600" />
-                )}
-              </button>
-
-              <button
-                type="button"
-                aria-pressed={googleSelectedEmail === 'rescue.volunteer@example.com'}
-                onClick={() => setGoogleSelectedEmail('rescue.volunteer@example.com')}
-                className={`w-full p-3 rounded-xl border flex items-center justify-between text-left transition-all ${
-                  googleSelectedEmail === 'rescue.volunteer@example.com'
-                    ? 'border-teal-600 bg-teal-50/70 ring-1 ring-teal-500'
-                    : 'border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-slate-700 text-white font-bold flex items-center justify-center text-xs">
-                    RV
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-900">Demo Volunteer</p>
-                    <p className="text-[11px] text-slate-500">rescue.volunteer@example.com</p>
-                  </div>
-                </div>
-                {googleSelectedEmail === 'rescue.volunteer@example.com' && (
-                  <CheckCircle2 className="w-4 h-4 text-teal-600" />
-                )}
-              </button>
-            </div>
-
-            {/* Demo account role */}
-            <div className="mb-5">
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Demo role:
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setGoogleRole('staff')}
-                  className={`py-2 px-3 text-xs font-medium rounded-lg border text-center transition-all ${
-                    googleRole === 'staff'
-                      ? 'border-teal-600 bg-teal-600 text-white shadow-sm'
-                      : 'border-slate-300 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  Shelter Staff
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGoogleRole('adopter')}
-                  className={`py-2 px-3 text-xs font-medium rounded-lg border text-center transition-all ${
-                    googleRole === 'adopter'
-                      ? 'border-teal-600 bg-teal-600 text-white shadow-sm'
-                      : 'border-slate-300 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  Potential Adopter
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => handleDemoLogin(googleSelectedEmail, googleRole)}
-              className="w-full py-2.5 px-4 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl text-sm transition-all"
-            >
-              Continue as {googleRole === 'staff' ? 'Staff' : 'Adopter'}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
