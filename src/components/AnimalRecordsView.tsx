@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Animal,
   AnimalStatus,
@@ -31,6 +31,8 @@ interface AnimalRecordsViewProps {
   onAddAnimal: (animal: Animal) => void;
   onUpdateAnimal: (animal: Animal) => void;
   selectedStatusFilter: AnimalStatus | 'All';
+  initialSelectedAnimal: Animal | null;
+  onClearInitialSelection: () => void;
 }
 
 export const AnimalRecordsView: React.FC<AnimalRecordsViewProps> = ({
@@ -38,6 +40,8 @@ export const AnimalRecordsView: React.FC<AnimalRecordsViewProps> = ({
   onAddAnimal,
   onUpdateAnimal,
   selectedStatusFilter,
+  initialSelectedAnimal,
+  onClearInitialSelection,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [speciesFilter, setSpeciesFilter] = useState<Species | 'All'>('All');
@@ -46,6 +50,12 @@ export const AnimalRecordsView: React.FC<AnimalRecordsViewProps> = ({
   // Modals
   const [showIntakeModal, setShowIntakeModal] = useState(false);
   const [selectedAnimalForCare, setSelectedAnimalForCare] = useState<Animal | null>(null);
+
+  useEffect(() => {
+    if (!initialSelectedAnimal) return;
+    setSelectedAnimalForCare(initialSelectedAnimal);
+    onClearInitialSelection();
+  }, [initialSelectedAnimal, onClearInitialSelection]);
 
   // New Intake Form State
   const [intakeName, setIntakeName] = useState('');

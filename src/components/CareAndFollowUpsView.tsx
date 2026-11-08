@@ -15,7 +15,7 @@ export const CareAndFollowUpsView: React.FC<CareAndFollowUpsViewProps> = ({
   applications,
   onCompleteFollowUp,
 }) => {
-  const [selectedMilestoneFilter, setSelectedMilestoneFilter] = useState<'All' | 'Pending' | 'Completed'>('All');
+  const [selectedMilestoneFilter, setSelectedMilestoneFilter] = useState<'All' | 'Pending' | 'Overdue' | 'Completed'>('All');
   const [reportExported, setReportExported] = useState(false);
 
   // Filtered follow ups
@@ -36,7 +36,10 @@ export const CareAndFollowUpsView: React.FC<CareAndFollowUpsViewProps> = ({
   const inCareCount = animals.filter((a) => a.status === 'Care & Monitoring' || a.status === 'Rescue & Intake').length;
   const listedCount = animals.filter((a) => a.status === 'Listed for Adoption' || a.status === 'Application' || a.status === 'Review & Match').length;
 
-  const vaccinatedCount = animals.filter((a) => a.vaccinations.length > 0).length;
+    const today = new Date().toISOString().split('T')[0];
+    const vaccinatedCount = animals.filter((a) =>
+      a.vaccinations.length > 0 && a.vaccinations.every((vaccine) => vaccine.nextDueDate >= today)
+    ).length;
   const vaccinationRate = totalAnimals > 0 ? Math.round((vaccinatedCount / totalAnimals) * 100) : 100;
 
   // Collect upcoming vaccinations
@@ -62,7 +65,7 @@ export const CareAndFollowUpsView: React.FC<CareAndFollowUpsViewProps> = ({
         listedCount,
         vaccinationComplianceRate: `${vaccinationRate}%`,
         activeApplicationsCount: applications.length,
-        followUpsPendingCount: followUps.filter((f) => f.status === 'Pending').length,
+        followUpsPendingCount: followUps.filter((f) => f.status === 'Pending' || f.status === 'Overdue').length,
       },
       animalsList: animals.map((a) => ({
         id: a.id,
@@ -80,7 +83,7 @@ export const CareAndFollowUpsView: React.FC<CareAndFollowUpsViewProps> = ({
     a.href = url;
     a.download = `paw_audit_report_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 
     setReportExported(true);
     setTimeout(() => setReportExported(false), 3000);
@@ -188,7 +191,7 @@ export const CareAndFollowUpsView: React.FC<CareAndFollowUpsViewProps> = ({
 
               {/* Filter */}
               <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
-                {(['All', 'Pending', 'Completed'] as const).map((fil) => (
+                {(['All', 'Pending', 'Overdue', 'Completed'] as const).map((fil) => (
                   <button
                     key={fil}
                     onClick={() => setSelectedMilestoneFilter(fil)}

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { AdoptionApplication, ApplicationStatus, Animal } from '../types.ts';
+import { AdoptionApplication, ApplicationStatus, Animal, AnimalStatus } from '../types.ts';
 import { CheckCircle2, Clock, Calendar, XCircle, Search, Filter, AlertCircle, Eye, UserCheck, MessageSquare, X } from 'lucide-react';
 
 interface AdoptionReviewViewProps {
   applications: AdoptionApplication[];
   animals: Animal[];
   onUpdateApplication: (app: AdoptionApplication) => void;
-  onUpdateAnimalStatus: (petId: string, newStatus: any) => void;
+  onUpdateAnimalStatus: (petId: string, newStatus: AnimalStatus, application?: AdoptionApplication) => void;
 }
 
 export const AdoptionReviewView: React.FC<AdoptionReviewViewProps> = ({
@@ -53,9 +53,18 @@ export const AdoptionReviewView: React.FC<AdoptionReviewViewProps> = ({
 
     // If approved or scheduled meet and greet, update animal's workflow status accordingly!
     if (newStatus === 'Approved') {
-      onUpdateAnimalStatus(selectedApp.petId, 'Adoption & Follow-up');
+      onUpdateAnimalStatus(selectedApp.petId, 'Adoption & Follow-up', updated);
     } else if (newStatus === 'Meet & Greet Scheduled' || newStatus === 'Under Review') {
       onUpdateAnimalStatus(selectedApp.petId, 'Review & Match');
+    } else if (newStatus === 'Declined') {
+      const anotherActiveApplication = applications.some((application) =>
+        application.petId === selectedApp.petId &&
+        application.id !== selectedApp.id &&
+        ['Submitted', 'Under Review', 'Meet & Greet Scheduled'].includes(application.status)
+      );
+      if (!anotherActiveApplication) {
+        onUpdateAnimalStatus(selectedApp.petId, 'Listed for Adoption');
+      }
     }
 
     setSelectedApp(updated);

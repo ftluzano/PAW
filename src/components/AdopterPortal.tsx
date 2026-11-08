@@ -43,7 +43,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
   const [applicationSuccess, setApplicationSuccess] = useState(false);
 
   // Follow-up check-in state
-  const [checkInPetId, setCheckInPetId] = useState('');
+  const [checkInId, setCheckInId] = useState('');
   const [checkInRating, setCheckInRating] = useState(5);
   const [checkInNotes, setCheckInNotes] = useState('');
   const [checkInVetDone, setCheckInVetDone] = useState(true);
@@ -66,6 +66,9 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
   const myApplications = applications.filter(
     (app) => app.applicantId === user.id || app.applicantEmail.toLowerCase() === user.email.toLowerCase()
   );
+  const myFollowUps = followUps.filter((followUp) => followUp.adopterEmail.toLowerCase() === user.email.toLowerCase());
+  const activeFollowUps = myFollowUps.filter((followUp) => followUp.status === 'Pending' || followUp.status === 'Overdue');
+  const activeFollowUp = activeFollowUps.find((followUp) => followUp.id === checkInId) || activeFollowUps[0];
 
   const handleApplySubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -261,9 +264,15 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
 
                     {/* Health & Medical Transparency */}
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-600">
-                      <span className="flex items-center gap-1 text-teal-700">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
-                        Vaccines Up to Date
+                      <span className={`flex items-center gap-1 ${pet.vaccinations.length > 0 && pet.vaccinations.every((vaccine) => vaccine.nextDueDate >= new Date().toISOString().slice(0, 10)) ? 'text-teal-700' : 'text-amber-700'}`}>
+                        {pet.vaccinations.length > 0 && pet.vaccinations.every((vaccine) => vaccine.nextDueDate >= new Date().toISOString().slice(0, 10))
+                          ? <CheckCircle2 className="h-3.5 w-3.5 text-teal-600" />
+                          : <AlertCircle className="h-3.5 w-3.5 text-amber-600" />}
+                        {pet.vaccinations.length === 0
+                          ? 'Vaccine record pending'
+                          : pet.vaccinations.every((vaccine) => vaccine.nextDueDate >= new Date().toISOString().slice(0, 10))
+                          ? 'Vaccines current'
+                          : 'Booster due'}
                       </span>
                       <span className="text-slate-500">
                         {pet.neuteredSpayed ? 'Spayed/Neutered' : 'Surgery Arranged'}
@@ -426,7 +435,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                 Scheduled Follow-up Milestones
               </h4>
 
-              {followUps.map((fup) => (
+              {myFollowUps.map((fup) => (
                 <div key={fup.id} className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
@@ -467,6 +476,8 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                 Submit Transition Check-in Update
               </h4>
 
+              {activeFollowUp ? (
+                <>
               {checkInSuccess && (
                 <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -475,9 +486,28 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
               )}
 
               <form
-                onSubmit={(e) => handleFollowUpSubmit(e, followUps[0]?.id || 'fup-201')}
+                onSubmit={(e) => handleFollowUpSubmit(e, activeFollowUp.id)}
                 className="space-y-3 text-xs"
               >
+                {activeFollowUps.length > 1 && (
+                  <div>
+                    <label className="mb-1 block font-semibold text-slate-700" htmlFor="follow-up-select">
+                      Check-in
+                    </label>
+                    <select
+                      id="follow-up-select"
+                      value={activeFollowUp.id}
+                      onChange={(e) => setCheckInId(e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900"
+                    >
+                      {activeFollowUps.map((followUp) => (
+                        <option key={followUp.id} value={followUp.id}>
+                          {followUp.petName} · {followUp.milestoneTitle}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Pet Adjustment Rating
@@ -542,6 +572,12 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                   <span>Submit Follow-up Check-in</span>
                 </button>
               </form>
+                </>
+              ) : (
+                <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
+                  No follow-up check-in is due for your account.
+                </p>
+              )}
             </div>
           </div>
         </div>

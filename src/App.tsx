@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { User, Animal, AdoptionApplication, FollowUpCheckIn, AnimalStatus, UserRole } from './types.ts';
-import { INITIAL_ANIMALS, INITIAL_APPLICATIONS, INITIAL_FOLLOW_UPS, INITIAL_STAFF_USER, INITIAL_ADOPTER_USER } from './data/initialData.ts';
+import React, { useEffect, useRef, useState } from 'react';
+import { User, Animal, AdoptionApplication, FollowUpCheckIn, AnimalStatus } from './types.ts';
+import { INITIAL_ANIMALS, INITIAL_APPLICATIONS, INITIAL_FOLLOW_UPS } from './data/initialData.ts';
 import { AuthScreen } from './components/AuthScreen.tsx';
 import { Header } from './components/Header.tsx';
 import { WorkflowPipelineBar } from './components/WorkflowPipelineBar.tsx';
@@ -16,7 +16,20 @@ import { CareAndFollowUpsView } from './components/CareAndFollowUpsView.tsx';
 import { InCareHealthMonitoring } from './components/InCareHealthMonitoring.tsx';
 import { PipelineBoard } from './components/PipelineBoard.tsx';
 import { SystemScopeModal } from './components/SystemScopeModal.tsx';
+import { AdminDashboard } from './components/AdminDashboard.tsx';
 import { Info, Heart, ShieldCheck, PawPrint } from 'lucide-react';
+
+type PublicPetPost = Pick<Animal,
+  'id' | 'name' | 'species' | 'breed' | 'age' | 'ageCategory' | 'gender' |
+  'weightLbs' | 'size' | 'photoUrl' | 'story' | 'temperament' | 'neuteredSpayed'
+>;
+
+type PublicPetPostUpdate = {
+  type: 'pet-post-updated';
+  post: PublicPetPost;
+};
+
+const PUBLIC_POST_CHANNEL = 'paw-public-pet-posts';
 
 export default function App() {
   // Authentication state - Starts on AuthScreen before entering mainscreen
@@ -32,12 +45,36 @@ export default function App() {
   const [selectedWorkflowStatus, setSelectedWorkflowStatus] = useState<AnimalStatus | 'All'>('All');
   const [isScopeModalOpen, setIsScopeModalOpen] = useState(false);
   const [selectedAnimalForCare, setSelectedAnimalForCare] = useState<Animal | null>(null);
+  const postUpdateChannel = useRef<BroadcastChannel | null>(null);
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return;
+
+    const channel = new BroadcastChannel(PUBLIC_POST_CHANNEL);
+    postUpdateChannel.current = channel;
+    const handlePostUpdate = (event: MessageEvent<PublicPetPostUpdate>) => {
+      if (event.data?.type !== 'pet-post-updated' || !event.data.post?.id) return;
+      const updatedPost = event.data.post;
+      setAnimals((prev) => prev.map((animal) =>
+        animal.id === updatedPost.id ? { ...animal, ...updatedPost } : animal
+      ));
+    };
+
+    channel.addEventListener('message', handlePostUpdate);
+    return () => {
+      channel.removeEventListener('message', handlePostUpdate);
+      channel.close();
+      postUpdateChannel.current = null;
+    };
+  }, []);
 
   // Handle Authentication
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
     // Set appropriate initial tab based on role
-    if (user.role === 'staff') {
+    if (user.role === 'admin') {
+      setActiveTab('admin-dashboard');
+    } else if (user.role === 'staff') {
       setActiveTab('records');
     } else {
       setActiveTab('browse');
@@ -49,19 +86,6 @@ export default function App() {
     setSelectedWorkflowStatus('All');
   };
 
-  const handleRoleToggle = () => {
-    if (!currentUser) return;
-    const newRole: UserRole = currentUser.role === 'staff' ? 'adopter' : 'staff';
-    const updatedUser: User = {
-      ...currentUser,
-      role: newRole,
-      name: newRole === 'staff' ? 'Sarah Martinez (Staff Mode)' : 'Franklin Luzano (Adopter Mode)',
-      organization: newRole === 'staff' ? 'Hope Haven Animal Welfare' : undefined,
-    };
-    setCurrentUser(updatedUser);
-    setActiveTab(newRole === 'staff' ? 'records' : 'browse');
-  };
-
   // Animal Data Handlers
   const handleAddAnimal = (newAnimal: Animal) => {
     setAnimals((prev) => [newAnimal, ...prev]);
@@ -69,6 +93,27 @@ export default function App() {
 
   const handleUpdateAnimal = (updatedAnimal: Animal) => {
     setAnimals((prev) => prev.map((a) => (a.id === updatedAnimal.id ? updatedAnimal : a)));
+    setSelectedAnimalForCare((current) => current?.id === updatedAnimal.id ? updatedAnimal : current);
+  };
+
+  const handleUpdateAnimalPost = (updatedAnimal: Animal) => {
+    handleUpdateAnimal(updatedAnimal);
+    const post: PublicPetPost = {
+      id: updatedAnimal.id,
+      name: updatedAnimal.name,
+      species: updatedAnimal.species,
+      breed: updatedAnimal.breed,
+      age: updatedAnimal.age,
+      ageCategory: updatedAnimal.ageCategory,
+      gender: updatedAnimal.gender,
+      weightLbs: updatedAnimal.weightLbs,
+      size: updatedAnimal.size,
+      photoUrl: updatedAnimal.photoUrl,
+      story: updatedAnimal.story,
+      temperament: [...updatedAnimal.temperament],
+      neuteredSpayed: updatedAnimal.neuteredSpayed,
+    };
+    postUpdateChannel.current?.postMessage({ type: 'pet-post-updated', post });
   };
 
   const handleMoveAnimalStage = (animalId: string, nextStatus: AnimalStatus) => {
@@ -77,20 +122,54 @@ export default function App() {
     );
   };
 
-  const handleUpdateAnimalStatus = (petId: string, newStatus: AnimalStatus) => {
+  const handleUpdateAnimalStatus = (
+    petId: string,
+    newStatus: AnimalStatus,
+    approvedApplication?: AdoptionApplication
+  ) => {
+    const adoptionDate = new Date().toISOString().split('T')[0];
     setAnimals((prev) =>
       prev.map((a) => {
         if (a.id === petId) {
           return {
             ...a,
             status: newStatus,
-            adopterName: newStatus === 'Adoption & Follow-up' ? 'Approved Adopter' : a.adopterName,
-            adoptionDate: newStatus === 'Adoption & Follow-up' ? new Date().toISOString().split('T')[0] : a.adoptionDate,
+            adopterName: newStatus === 'Adoption & Follow-up' ? approvedApplication?.applicantName || a.adopterName : a.adopterName,
+            adopterEmail: newStatus === 'Adoption & Follow-up' ? approvedApplication?.applicantEmail || a.adopterEmail : a.adopterEmail,
+            adoptionDate: newStatus === 'Adoption & Follow-up' ? adoptionDate : a.adoptionDate,
           };
         }
         return a;
       })
     );
+
+    if (newStatus === 'Adoption & Follow-up' && approvedApplication) {
+      const createDueDate = (days: number) => {
+        const dueDate = new Date(`${adoptionDate}T00:00:00Z`);
+        dueDate.setUTCDate(dueDate.getUTCDate() + days);
+        return dueDate.toISOString().split('T')[0];
+      };
+      const milestones = [
+        { days: 30, title: '30-Day Transition Check-in' as const },
+        { days: 60, title: '60-Day Wellness Review' as const },
+      ];
+      setFollowUps((prev) => {
+        const newFollowUps = milestones
+          .map(({ days, title }) => ({
+            id: `fup-${approvedApplication.id}-${days}`,
+            petId,
+            petName: approvedApplication.petName,
+            adopterName: approvedApplication.applicantName,
+            adopterEmail: approvedApplication.applicantEmail,
+            adoptionDate,
+            milestoneTitle: title,
+            dueDate: createDueDate(days),
+            status: 'Pending' as const,
+          }))
+          .filter((newFollowUp) => !prev.some((followUp) => followUp.id === newFollowUp.id));
+        return [...prev, ...newFollowUps];
+      });
+    }
   };
 
   // Applications Handlers
@@ -158,6 +237,7 @@ export default function App() {
 
   // IF AUTHENTICATED: Show Main Screen
   const isStaff = currentUser.role === 'staff';
+  const isAdmin = currentUser.role === 'admin';
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
@@ -167,25 +247,39 @@ export default function App() {
         user={currentUser}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onRoleToggle={handleRoleToggle}
         onOpenScopeModal={() => setIsScopeModalOpen(true)}
         onLogout={handleLogout}
       />
 
       {/* Slide 4 Basic Workflow Bar (Clickable 6-stage filter) */}
-      <WorkflowPipelineBar
-        selectedStatus={selectedWorkflowStatus}
-        onSelectStatus={(status) => {
-          setSelectedWorkflowStatus(status);
-          if (status !== 'All' && isStaff && activeTab !== 'records' && activeTab !== 'pipeline') {
-            setActiveTab('records');
-          }
-        }}
-        statusCounts={statusCounts}
-      />
+      {isStaff && (
+        <WorkflowPipelineBar
+          selectedStatus={selectedWorkflowStatus}
+          onSelectStatus={(status) => {
+            setSelectedWorkflowStatus(status);
+            if (status !== 'All' && activeTab !== 'records' && activeTab !== 'pipeline') {
+              setActiveTab('records');
+            }
+          }}
+          statusCounts={statusCounts}
+        />
+      )}
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div key={`${currentUser.role}-${activeTab}`} className="app-content">
+
+        {isAdmin && (
+          <AdminDashboard
+            user={currentUser}
+            animals={animals}
+            applications={applications}
+            followUps={followUps}
+            onUpdateAnimal={handleUpdateAnimalPost}
+            activeTab={activeTab}
+            onSelectTab={setActiveTab}
+          />
+        )}
         
         {/* SHELTER / RESCUE STAFF VIEWS */}
         {isStaff && (
@@ -196,6 +290,8 @@ export default function App() {
                 onAddAnimal={handleAddAnimal}
                 onUpdateAnimal={handleUpdateAnimal}
                 selectedStatusFilter={selectedWorkflowStatus}
+                initialSelectedAnimal={selectedAnimalForCare}
+                onClearInitialSelection={() => setSelectedAnimalForCare(null)}
               />
             )}
 
@@ -238,7 +334,7 @@ export default function App() {
         )}
 
         {/* POTENTIAL ADOPTER VIEWS */}
-        {!isStaff && (
+        {currentUser.role === 'adopter' && (
           <AdopterPortal
             user={currentUser}
             animals={animals}
@@ -257,18 +353,17 @@ export default function App() {
             }
           />
         )}
+        </div>
       </main>
 
-      {/* Quiet, anti-slop footer (§1.B) */}
       <footer className="border-t border-slate-200 bg-white py-6 mt-12 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <div className="w-5 h-5 rounded bg-teal-500/10 text-teal-600 flex items-center justify-center">
               <PawPrint className="w-3.5 h-3.5" />
             </div>
-            <span className="font-semibold text-slate-700">PAW Pet Adoption & Care System</span>
-            <span aria-hidden="true">·</span>
-            <span>Helping every animal move toward a safe, loving home.</span>
+            <span className="font-semibold text-slate-700">PAW</span>
+            <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-700">Sample records</span>
           </div>
 
           <div className="flex items-center gap-4 text-slate-500">
@@ -276,10 +371,8 @@ export default function App() {
               onClick={() => setIsScopeModalOpen(true)}
               className="hover:text-teal-700 transition-colors"
             >
-              System Scope & Limitations
+              System scope
             </button>
-            <span aria-hidden="true">·</span>
-            <span>Ethical Human-Led Care</span>
           </div>
         </div>
       </footer>

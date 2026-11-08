@@ -1,12 +1,11 @@
 import React from 'react';
 import { User, UserRole } from '../types.ts';
-import { PawPrint, LogOut, Info, ArrowLeftRight } from 'lucide-react';
+import { PawPrint, LogOut, Info } from 'lucide-react';
 
 interface HeaderProps {
   user: User;
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  onRoleToggle: () => void;
   onOpenScopeModal: () => void;
   onLogout: () => void;
 }
@@ -15,13 +14,18 @@ export const Header: React.FC<HeaderProps> = ({
   user,
   activeTab,
   setActiveTab,
-  onRoleToggle,
   onOpenScopeModal,
   onLogout,
 }) => {
   const isStaff = user.role === 'staff';
 
-  const navLinks = isStaff
+  const navLinks = user.role === 'admin'
+    ? [
+        { id: 'admin-dashboard', label: 'Overview' },
+        { id: 'admin-posts', label: 'Pet Posts' },
+        { id: 'admin-reports', label: 'Reports' },
+      ]
+    : isStaff
     ? [
         { id: 'records', label: 'Animal Records' },
         { id: 'clinical', label: 'In-Care Health Monitoring' },
@@ -47,6 +51,9 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
           <span className="text-lg font-bold tracking-tight text-white whitespace-nowrap">
             PAW System
+          </span>
+          <span className="rounded border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-300">
+            Demo
           </span>
         </div>
 
@@ -75,18 +82,12 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </nav>
 
-        {/* Zone 3: 1 primary action / Profile & Role Switcher */}
+        {/* Zone 3: Account role and sign out */}
         <div className="flex items-center gap-3 shrink-0">
-          {/* Role badge and switch button */}
-          <button
-            onClick={onRoleToggle}
-            title={`Switch to ${isStaff ? 'Potential Adopter' : 'Shelter Staff'} view`}
-            className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-slate-200 transition-colors whitespace-nowrap shrink-0"
-          >
-            <span className={`w-2 h-2 rounded-full ${isStaff ? 'bg-teal-400' : 'bg-rose-400'}`} />
-            <span>Mode: {isStaff ? 'Staff' : 'Adopter'}</span>
-            <ArrowLeftRight className="w-3 h-3 text-slate-400" />
-          </button>
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 border border-slate-700 text-slate-200 whitespace-nowrap shrink-0">
+            <span className={`w-2 h-2 rounded-full ${user.role === 'admin' ? 'bg-amber-400' : isStaff ? 'bg-teal-400' : 'bg-rose-400'}`} />
+            <span>{user.role === 'admin' ? 'Administrator' : isStaff ? 'Shelter Staff' : 'Adopter'}</span>
+          </div>
 
           {/* User Profile & Sign out */}
           <div className="flex items-center gap-2.5 pl-2 border-l border-slate-800">
@@ -95,7 +96,7 @@ export const Header: React.FC<HeaderProps> = ({
                 {user.name}
               </p>
               <p className="text-[10px] text-slate-400 leading-tight">
-                {isStaff ? 'Shelter Lead' : 'Adopter'}
+                {user.role === 'admin' ? 'Administrator' : isStaff ? 'Shelter Staff' : 'Adopter'}
               </p>
             </div>
             
@@ -130,12 +131,6 @@ export const Header: React.FC<HeaderProps> = ({
           className="whitespace-nowrap px-2.5 py-1 rounded text-teal-400 bg-teal-950/60 border border-teal-800/50"
         >
           Scope
-        </button>
-        <button
-          onClick={onRoleToggle}
-          className="whitespace-nowrap px-2.5 py-1 rounded text-slate-300 bg-slate-800"
-        >
-          Toggle: {isStaff ? 'Staff' : 'Adopter'}
         </button>
       </div>
     </header>
