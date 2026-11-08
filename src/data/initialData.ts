@@ -1,4 +1,8 @@
 import { Animal, AdoptionApplication, FollowUpCheckIn, User } from '../types.ts';
+import barnabyPhoto from '../assets/images/paw_dog_golden_mix_1794111872445.jpg';
+import cleoPhoto from '../assets/images/paw_cat_calico_rescue_1794111872748.jpg';
+import atlasPhoto from '../assets/images/paw_dog_shepherd_pup_1794111873742.jpg';
+import mochiPhoto from '../assets/images/paw_cat_tabby_gentle_1794111873155.jpg';
 
 export const INITIAL_STAFF_USER: User = {
   id: 'staff-1',
@@ -32,7 +36,7 @@ export const INITIAL_ANIMALS: Animal[] = [
     intakeDate: '2026-09-14',
     intakeLocation: 'Found stray near Riverside County Park',
     intakeNotes: 'Mild dehydration and heavy tick infestation upon field intake. Patient alert and responsive.',
-    photoUrl: '/src/assets/images/paw_dog_golden_mix_1794111872445.jpg',
+    photoUrl: barnabyPhoto,
     status: 'Listed for Adoption',
     healthStatus: 'Healthy / Stable',
     story: 'Friendly retriever mix; medically cleared for adoption.',
@@ -130,7 +134,7 @@ export const INITIAL_ANIMALS: Animal[] = [
     intakeDate: '2026-10-20',
     intakeLocation: 'Owner relocation surrender',
     intakeNotes: 'Indoor-only history. Well-nourished, litter trained.',
-    photoUrl: '/src/assets/images/paw_cat_calico_rescue_1794111872748.jpg',
+    photoUrl: cleoPhoto,
     status: 'Care & Monitoring',
     healthStatus: 'Under Active Monitoring',
     quarantineWard: 'Feline Observation Unit A',
@@ -219,7 +223,7 @@ export const INITIAL_ANIMALS: Animal[] = [
     intakeDate: '2026-11-02',
     intakeLocation: 'Found roaming near Highland Foothills Road',
     intakeNotes: 'Emaciated rescued adolescent dog. No collar or microchip identified upon arrival. Mild fever and diarrhea on intake day 2.',
-    photoUrl: '/src/assets/images/paw_dog_shepherd_pup_1794111873742.jpg',
+    photoUrl: atlasPhoto,
     status: 'Care & Monitoring',
     healthStatus: 'In Medical Isolation',
     quarantineWard: 'Canine Medical Quarantine #3',
@@ -320,7 +324,7 @@ export const INITIAL_ANIMALS: Animal[] = [
     intakeDate: '2026-08-10',
     intakeLocation: 'Rescued from local industrial complex',
     intakeNotes: 'Bilateral otodectic mange (ear mites). Mild tooth tartar.',
-    photoUrl: '/src/assets/images/paw_cat_tabby_gentle_1794111873155.jpg',
+    photoUrl: mochiPhoto,
     status: 'Review & Match',
     healthStatus: 'Healthy / Stable',
     story: 'Calm tabby, cleared for meet-and-greet.',
@@ -480,7 +484,7 @@ export const INITIAL_ANIMALS: Animal[] = [
     intakeDate: '2026-11-07',
     intakeLocation: 'Found near Elm Creek Trail',
     intakeNotes: 'Initial exam complete; monitoring appetite and hydration.',
-    photoUrl: '/src/assets/images/paw_dog_shepherd_pup_1794111873742.jpg',
+    photoUrl: atlasPhoto,
     status: 'Rescue & Intake',
     healthStatus: 'Under Active Monitoring',
     story: 'Curious beagle mix settling in after rescue.',

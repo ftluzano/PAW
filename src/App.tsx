@@ -29,9 +29,44 @@ type PublicPetPost = Pick<Animal,
 type PublicPetPostUpdate = {
   type: 'pet-post-updated';
   post: PublicPetPost;
+} | {
+  type: 'pet-posts-cleared';
 };
 
 const PUBLIC_POST_CHANNEL = 'paw-public-pet-posts';
+const PUBLIC_POST_STATUSES = new Set<AnimalStatus>(['Listed for Adoption', 'Application', 'Review & Match']);
+
+const toPublicPetPost = (animal: Animal): PublicPetPost => ({
+  id: animal.id,
+  name: animal.name,
+  species: animal.species,
+  breed: animal.breed,
+  age: animal.age,
+  ageCategory: animal.ageCategory,
+  gender: animal.gender,
+  weightLbs: animal.weightLbs,
+  size: animal.size,
+  photoUrl: animal.photoUrl,
+  story: animal.story,
+  temperament: [...animal.temperament],
+  neuteredSpayed: animal.neuteredSpayed,
+});
+
+async function authorizedPostRequest(method: 'POST' | 'DELETE', body?: Record<string, unknown>) {
+  const firebaseUser = firebaseAuth?.currentUser;
+  if (!firebaseUser) throw new Error('Your admin session expired. Sign in again.');
+  const response = await fetch('/api/pet-posts', {
+    method,
+    headers: {
+      Authorization: `Bearer ${await firebaseUser.getIdToken()}`,
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const result = await response.json().catch(() => ({})) as { error?: string };
+  if (!response.ok) throw new Error(result.error || 'Turso could not save the pet records.');
+  return result;
+}
 
 export default function App() {
   // Authentication state - Starts on AuthScreen before entering mainscreen
@@ -48,6 +83,7 @@ export default function App() {
   const [selectedWorkflowStatus, setSelectedWorkflowStatus] = useState<AnimalStatus | 'All'>('All');
   const [selectedAnimalForCare, setSelectedAnimalForCare] = useState<Animal | null>(null);
   const postUpdateChannel = useRef<BroadcastChannel | null>(null);
+  const postEtag = useRef('');
 
   useEffect(() => {
     if (!firebaseAuth) return;
@@ -91,11 +127,14 @@ export default function App() {
     const channel = new BroadcastChannel(PUBLIC_POST_CHANNEL);
     postUpdateChannel.current = channel;
     const handlePostUpdate = (event: MessageEvent<PublicPetPostUpdate>) => {
-      if (event.data?.type !== 'pet-post-updated' || !event.data.post?.id) return;
-      const updatedPost = event.data.post;
-      setAnimals((prev) => prev.map((animal) =>
-        animal.id === updatedPost.id ? { ...animal, ...updatedPost } : animal
-      ));
+      if (event.data?.type === 'pet-posts-cleared') {
+        setAnimals((prev) => prev.filter((animal) => !PUBLIC_POST_STATUSES.has(animal.status)));
+      } else if (event.data?.type === 'pet-post-updated' && event.data.post?.id) {
+        const updatedPost = event.data.post;
+        setAnimals((prev) => prev.map((animal) =>
+          animal.id === updatedPost.id ? { ...animal, ...updatedPost } : animal
+        ));
+      }
     };
 
     channel.addEventListener('message', handlePostUpdate);
@@ -105,6 +144,60 @@ export default function App() {
       postUpdateChannel.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    let active = true;
+    let requestInFlight = false;
+
+    const pollPublicPosts = async () => {
+      if (requestInFlight) return;
+      requestInFlight = true;
+      try {
+        const response = await fetch('/api/pet-posts', {
+          cache: 'no-store',
+          headers: postEtag.current ? { 'If-None-Match': postEtag.current } : {},
+        });
+        if (response.status === 304) return;
+        if (!response.ok) return;
+        postEtag.current = response.headers.get('ETag') || '';
+        let result = await response.json() as { initialized: boolean; posts: PublicPetPost[] };
+
+        if (!result.initialized && currentUser.role === 'admin') {
+          await authorizedPostRequest('POST', {
+            action: 'initialize',
+            posts: animals.filter((animal) => PUBLIC_POST_STATUSES.has(animal.status)).map(toPublicPetPost),
+          });
+          const initializedResponse = await fetch('/api/pet-posts', {
+            cache: 'no-store',
+            headers: postEtag.current ? { 'If-None-Match': postEtag.current } : {},
+          });
+          if (!initializedResponse.ok) return;
+          postEtag.current = initializedResponse.headers.get('ETag') || '';
+          result = await initializedResponse.json() as { initialized: boolean; posts: PublicPetPost[] };
+        }
+
+        if (!active || !result.initialized) return;
+        const postsById = new Map(result.posts.map((post) => [post.id, post]));
+        setAnimals((previous) => previous.flatMap((animal) => {
+          if (!PUBLIC_POST_STATUSES.has(animal.status)) return [animal];
+          const post = postsById.get(animal.id);
+          return post ? [{ ...animal, ...post }] : [];
+        }));
+      } catch {
+        // Keep the last available local view during brief network or database outages.
+      } finally {
+        requestInFlight = false;
+      }
+    };
+
+    void pollPublicPosts();
+    const pollTimer = window.setInterval(() => void pollPublicPosts(), 3000);
+    return () => {
+      active = false;
+      window.clearInterval(pollTimer);
+    };
+  }, [currentUser?.id, currentUser?.role]);
 
   // Handle Authentication
   const handleLoginSuccess = (user: User) => {
@@ -136,24 +229,17 @@ export default function App() {
     setSelectedAnimalForCare((current) => current?.id === updatedAnimal.id ? updatedAnimal : current);
   };
 
-  const handleUpdateAnimalPost = (updatedAnimal: Animal) => {
+  const handleUpdateAnimalPost = async (updatedAnimal: Animal) => {
+    const post = toPublicPetPost(updatedAnimal);
+    await authorizedPostRequest('POST', { action: 'upsert', post });
     handleUpdateAnimal(updatedAnimal);
-    const post: PublicPetPost = {
-      id: updatedAnimal.id,
-      name: updatedAnimal.name,
-      species: updatedAnimal.species,
-      breed: updatedAnimal.breed,
-      age: updatedAnimal.age,
-      ageCategory: updatedAnimal.ageCategory,
-      gender: updatedAnimal.gender,
-      weightLbs: updatedAnimal.weightLbs,
-      size: updatedAnimal.size,
-      photoUrl: updatedAnimal.photoUrl,
-      story: updatedAnimal.story,
-      temperament: [...updatedAnimal.temperament],
-      neuteredSpayed: updatedAnimal.neuteredSpayed,
-    };
     postUpdateChannel.current?.postMessage({ type: 'pet-post-updated', post });
+  };
+
+  const handleClearPublicPosts = async () => {
+    await authorizedPostRequest('DELETE');
+    setAnimals((previous) => previous.filter((animal) => !PUBLIC_POST_STATUSES.has(animal.status)));
+    postUpdateChannel.current?.postMessage({ type: 'pet-posts-cleared' });
   };
 
   const handleMoveAnimalStage = (animalId: string, nextStatus: AnimalStatus) => {
@@ -324,6 +410,7 @@ export default function App() {
             applications={applications}
             followUps={followUps}
             onUpdateAnimal={handleUpdateAnimalPost}
+            onClearPosts={handleClearPublicPosts}
             activeTab={activeTab}
             onSelectTab={setActiveTab}
           />

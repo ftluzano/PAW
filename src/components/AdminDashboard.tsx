@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Animal, AnimalStatus, AdoptionApplication, FollowUpCheckIn, User } from '../types.ts';
-import { Download, FileText, HeartPulse, PawPrint, Pencil, ShieldAlert, X } from 'lucide-react';
+import { Download, FileText, HeartPulse, PawPrint, Pencil, ShieldAlert, Trash2, Upload, X } from 'lucide-react';
 import { WORKFLOW_STAGES } from './WorkflowPipelineBar.tsx';
 
 interface AdminDashboardProps {
@@ -8,9 +8,32 @@ interface AdminDashboardProps {
   animals: Animal[];
   applications: AdoptionApplication[];
   followUps: FollowUpCheckIn[];
-  onUpdateAnimal: (animal: Animal) => void;
+  onUpdateAnimal: (animal: Animal) => Promise<void>;
+  onClearPosts: () => Promise<void>;
   activeTab: string;
   onSelectTab: (tab: string) => void;
+}
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_DATA_URL_LENGTH = 3_400_000;
+
+async function encodePetPhoto(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) throw new Error('Choose an image file.');
+  if (file.size > MAX_UPLOAD_BYTES) throw new Error('Image must be 10 MB or smaller.');
+
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Image could not be processed.');
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.78);
+  if (dataUrl.length > MAX_DATA_URL_LENGTH) throw new Error('Compressed image is too large. Choose a smaller image.');
+  return dataUrl;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -19,10 +42,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   applications,
   followUps,
   onUpdateAnimal,
+  onClearPosts,
   activeTab,
   onSelectTab,
 }) => {
   const [postDraft, setPostDraft] = useState<Animal | null>(null);
+  const [postError, setPostError] = useState('');
+  const [isSavingPost, setIsSavingPost] = useState(false);
+  const [isClearingPosts, setIsClearingPosts] = useState(false);
   const stageCounts = animals.reduce((counts, animal) => {
     counts[animal.status] = (counts[animal.status] || 0) + 1;
     return counts;
@@ -134,6 +161,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {isPostsView ? (
         <section className="space-y-4">
+          <div className="flex justify-end">
+            <button
+              type="button"
+              disabled={isClearingPosts || publicPosts.length === 0}
+              onClick={async () => {
+                if (!window.confirm(`Permanently remove all ${publicPosts.length} public pet posts for every user? Medical records and applications will remain.`)) return;
+                setIsClearingPosts(true);
+                setPostError('');
+                try {
+                  await onClearPosts();
+                } catch (error) {
+                  setPostError(error instanceof Error ? error.message : 'Could not clear public posts.');
+                } finally {
+                  setIsClearingPosts(false);
+                }
+              }}
+              className="inline-flex items-center gap-2 rounded-lg border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {isClearingPosts ? 'Clearing…' : 'Clear all public posts'}
+            </button>
+          </div>
+          {postError && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-xs text-rose-800">{postError}</p>}
           {publicPosts.length === 0 ? (
             <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
               <p className="font-semibold text-slate-800">No pet posts available</p>
@@ -230,10 +280,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {postDraft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <form
-            onSubmit={(event) => {
+            onSubmit={async (event) => {
               event.preventDefault();
-              onUpdateAnimal(postDraft);
-              setPostDraft(null);
+              setIsSavingPost(true);
+              setPostError('');
+              try {
+                await onUpdateAnimal(postDraft);
+                setPostDraft(null);
+              } catch (error) {
+                setPostError(error instanceof Error ? error.message : 'Could not save this post.');
+              } finally {
+                setIsSavingPost(false);
+              }
             }}
             className="w-full max-w-xl space-y-4 rounded-xl bg-white p-5 shadow-2xl"
             role="dialog"
@@ -249,6 +307,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <X className="h-4 w-4" />
               </button>
             </div>
+
+            {postError && (
+              <p role="alert" className="rounded-lg bg-rose-50 p-3 text-xs text-rose-800">
+                {postError}
+              </p>
+            )}
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="space-y-1 text-xs font-semibold text-slate-700">
@@ -299,10 +363,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <option value="Large">Large</option>
                 </select>
               </label>
-              <label className="space-y-1 text-xs font-semibold text-slate-700">
-                Photo URL or path
-                <input required value={postDraft.photoUrl} onChange={(event) => setPostDraft({ ...postDraft, photoUrl: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="block text-xs font-semibold text-slate-700">Pet photo</span>
+              <img src={postDraft.photoUrl} alt={`${postDraft.name} post preview`} className="h-32 w-full rounded-lg bg-slate-100 object-cover" />
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                <Upload className="h-3.5 w-3.5" />
+                Upload image
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={async (event) => {
+                    const file = event.currentTarget.files?.[0];
+                    event.currentTarget.value = '';
+                    if (!file) return;
+                    setPostError('');
+                    try {
+                      const photoUrl = await encodePetPhoto(file);
+                      setPostDraft((current) => current ? { ...current, photoUrl } : current);
+                    } catch (error) {
+                      setPostError(error instanceof Error ? error.message : 'Could not read this image.');
+                    }
+                  }}
+                />
               </label>
+              <p className="text-[11px] text-slate-500">Compressed image stored in Turso. Max 10 MB upload.</p>
             </div>
 
             <label className="inline-flex items-center gap-2 text-sm text-slate-700">
@@ -328,8 +415,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </label>
 
             <div className="flex justify-end gap-2 border-t border-slate-200 pt-3">
-              <button type="button" onClick={() => setPostDraft(null)} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
-              <button type="submit" className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">Save changes</button>
+              <button type="button" disabled={isSavingPost} onClick={() => setPostDraft(null)} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">Cancel</button>
+              <button type="submit" disabled={isSavingPost} className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-wait disabled:opacity-60">{isSavingPost ? 'Saving…' : 'Save changes'}</button>
             </div>
           </form>
         </div>
