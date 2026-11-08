@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { User, UserRole } from '../types.ts';
 import { FirebaseError } from '@firebase/app';
 import { getIdTokenResult, signInWithPopup } from '@firebase/auth';
-import { ShieldCheck, Heart, Mail, LogIn, UserPlus, Sparkles, AlertCircle, CheckCircle2, ChevronRight } from 'lucide-react';
+import { ShieldCheck, Heart, Mail, LogIn, UserPlus, Sparkles, AlertCircle, ChevronRight } from 'lucide-react';
 import heroDog from '../assets/images/paw_dog_golden_mix_1794111872445.jpg';
 import { BrandLogo } from './BrandLogo.tsx';
 import { firebaseAuth, googleAuthProvider } from '../firebase.ts';
@@ -13,13 +13,11 @@ interface AuthScreenProps {
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [role, setRole] = useState<Exclude<UserRole, 'admin'>>('staff');
 
   // Form states
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [organization, setOrganization] = useState('Hope Haven Animal Rescue');
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -49,11 +47,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
         id: `user-${Date.now()}`,
         name: mode === 'register' ? name : email.split('@')[0],
         email: email,
-        role: role,
-        organization: role === 'staff' ? organization : undefined,
-        avatarUrl: role === 'staff' 
-          ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80'
-          : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        role: 'adopter',
+        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       };
       onLoginSuccess(user);
     }, 400);
@@ -204,7 +199,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
           <div className="flex items-center justify-between pb-4 border-b border-slate-700/60">
             <div>
               <h2 className="text-2xl font-bold tracking-tight text-white">
-                {mode === 'login' ? 'Sign In to PAW' : 'Create an Account'}
+                {mode === 'login' ? 'Sign In to PAW' : 'Create an Adopter Account'}
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
                 Sign in with your Google account.
@@ -272,77 +267,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
           {/* Form */}
           <form key={mode} onSubmit={handleFormSubmit} className="space-y-4">
             
-            {/* Register specific: Full Name & Role Choice */}
+            {/* Adopter registration details */}
             {mode === 'register' && (
-              <>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Your name"
-                    className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Account Type (Select Role)
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setRole('staff')}
-                      className={`p-3 text-left rounded-lg border transition-all ${
-                        role === 'staff'
-                          ? 'border-teal-500 bg-teal-950/40 text-teal-300'
-                          : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'
-                      }`}
-                    >
-                      <p className="text-xs font-bold text-white flex items-center justify-between">
-                        Shelter / Rescue Staff
-                        {role === 'staff' && <CheckCircle2 className="w-3.5 h-3.5 text-teal-400" />}
-                      </p>
-                      <p className="text-[11px] text-slate-400 mt-1">Manage intake, care records & review adoption requests</p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setRole('adopter')}
-                      className={`p-3 text-left rounded-lg border transition-all ${
-                        role === 'adopter'
-                          ? 'border-teal-500 bg-teal-950/40 text-teal-300'
-                          : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'
-                      }`}
-                    >
-                      <p className="text-xs font-bold text-white flex items-center justify-between">
-                        Potential Adopter
-                        {role === 'adopter' && <CheckCircle2 className="w-3.5 h-3.5 text-teal-400" />}
-                      </p>
-                      <p className="text-[11px] text-slate-400 mt-1">Browse pets, apply for adoption & track follow-ups</p>
-                    </button>
-                  </div>
-                </div>
-
-                {role === 'staff' && (
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      Welfare Organization / Shelter Name
-                    </label>
-                    <input
-                      type="text"
-                      value={organization}
-                      onChange={(e) => setOrganization(e.target.value)}
-                      placeholder="e.g. Hope Sanctuary Animal Welfare"
-                      className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-teal-500"
-                    />
-                  </div>
-                )}
-              </>
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Your name"
+                  className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                />
+              </div>
             )}
 
             {/* Email Address */}
