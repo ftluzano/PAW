@@ -196,7 +196,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
               >
                 <div>
                   {/* Photo Container */}
-                  <div className="relative h-44 sm:h-56 w-full bg-slate-100 overflow-hidden">
+                  <div className="relative aspect-[4/3] sm:aspect-[16/10] w-full bg-slate-100 overflow-hidden">
                     <img
                       src={pet.photoUrl}
                       alt={pet.name}
@@ -703,9 +703,9 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleApplySubmit} className="min-h-0 overflow-y-auto p-4 sm:p-6 space-y-3 sm:space-y-4 text-xs">
+            <form onSubmit={handleApplySubmit} className="min-h-0 overflow-y-auto p-3 sm:p-6 space-y-2.5 sm:space-y-4 text-xs">
               {applicationSuccess ? (
-                <div className="p-8 text-center space-y-2">
+                <div className="p-5 sm:p-8 text-center space-y-2">
                   <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
                     <CheckCircle2 className="w-7 h-7" />
                   </div>
@@ -716,31 +716,31 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                 </div>
               ) : (
                 <>
-                  <div className="p-3 rounded-lg bg-teal-50 border border-teal-200 text-teal-900 text-[11px]">
+                  <div className="p-2.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-900 text-[11px] leading-snug">
                     <strong>PAW Human-Led Adoption Review:</strong> Shelter staff will review your housing arrangements, schedule, and experience to ensure the best lifelong match for both you and {selectedPetForApply.name}.
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Your Full Name</label>
+                      <label className="block font-semibold text-slate-700 mb-0.5">Your Full Name</label>
                       <input
                         type="text"
                         required
                         value={applicantName}
                         onChange={(e) => setApplicantName(e.target.value)}
                         placeholder="Enter your full name"
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-600"
+                        className="w-full px-3 py-1 border border-slate-200 rounded-lg bg-white text-slate-900"
                       />
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Contact Phone</label>
+                      <label className="block font-semibold text-slate-700 mb-0.5">Contact Phone</label>
                       <input
                         type="text"
                         required
                         value={applicantPhone}
                         onChange={(e) => setApplicantPhone(e.target.value)}
                         placeholder="(555) 000-0000"
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-teal-500"
+                        className="w-full px-3 py-1 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-teal-500"
                       />
                     </div>
 
@@ -750,7 +750,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                         value={homeType}
                         required
                         onChange={(e) => setHomeType(e.target.value as typeof homeType)}
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-slate-900"
+                        className="w-full px-3 py-1 border border-slate-200 rounded-lg text-slate-900"
                       >
                         <option value="">Select housing type</option>
                         <option value="House with yard">House with fenced yard</option>
@@ -788,7 +788,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
+                    <label className="block font-semibold text-slate-700 mb-0.5">
                       Estimated Hours Pet Will Be Home Alone Daily
                     </label>
                     <input
@@ -797,12 +797,12 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                       max={16}
                       value={hoursAloneDaily}
                       onChange={(e) => setHoursAloneDaily(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-teal-500"
+                      className="w-full px-3 py-1 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-teal-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
+                    <label className="block font-semibold text-slate-700 mb-0.5">
                       Are There Other Pets Currently in the Household?
                     </label>
                     <div className="flex items-center gap-4 mb-2">
@@ -847,7 +847,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                       onChange={(e) => setPetExperience(e.target.value)}
                       required
                       placeholder="Briefly describe your history caring for animals..."
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-slate-900"
+                      className="w-full px-3 py-1 border border-slate-200 rounded-lg text-slate-900"
                     />
                   </div>
 
@@ -867,17 +867,17 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
 
                   {applicationError && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-xs text-rose-800">{applicationError}</p>}
 
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => setSelectedPetForApply(null)}
-                      className="px-4 py-2 text-slate-600 hover:text-slate-900 font-medium"
+                      className="px-3 py-1.5 text-slate-600 hover:text-slate-900 font-medium"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg shadow-sm"
+                      className="px-4 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg shadow-sm"
                     >
                       Submit Adoption Application
                     </button>

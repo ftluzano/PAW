@@ -86,7 +86,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const clearAllRecords = async () => {
-    if (!window.confirm('Permanently remove all animal records, applications, follow-ups, and public posts for every user?')) return;
+    if (!window.confirm('Permanently remove all animal records, applications, and follow-ups? Pet Posts will be preserved.')) return;
     setIsClearingPosts(true);
     setPostError('');
     try {
@@ -233,7 +233,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {publicPosts.map((animal) => (
                 <article key={animal.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                  <img src={animal.photoUrl} alt={animal.name} className="h-44 w-full bg-slate-100 object-cover" />
+                  <img src={animal.photoUrl} alt={animal.name} className="block aspect-[4/3] w-full bg-slate-100 object-cover sm:aspect-[16/10]" />
                   <div className="space-y-3 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>

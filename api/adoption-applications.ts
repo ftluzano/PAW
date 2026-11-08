@@ -76,9 +76,10 @@ function isAdmin(identity: DecodedIdToken): boolean {
 }
 
 async function ensureSchema(client: Client): Promise<void> {
-  await client.execute(
-    'CREATE TABLE IF NOT EXISTS paw_adoption_applications (id TEXT PRIMARY KEY NOT NULL, applicant_id TEXT NOT NULL, payload TEXT NOT NULL, updated_at TEXT NOT NULL)'
-  );
+  await client.batch([
+    'CREATE TABLE IF NOT EXISTS paw_adoption_applications (id TEXT PRIMARY KEY NOT NULL, applicant_id TEXT NOT NULL, payload TEXT NOT NULL, updated_at TEXT NOT NULL)',
+    'CREATE TABLE IF NOT EXISTS paw_workspace_state (id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1), records_cleared INTEGER NOT NULL, updated_at TEXT NOT NULL)',
+  ], 'write');
 }
 
 function parseBody(body: unknown): Record<string, unknown> | null {
@@ -137,13 +138,19 @@ export default async function handler(request: ApiRequest, response: ApiResponse
     await ensureSchema(client);
 
     if (request.method === 'GET') {
-      if (!isAdmin(identity)) return sendJson(response, 403, { error: 'Admin access required.' });
-      return sendJson(response, 200, { applications: await readApplications(client) });
+      const state = await client.execute('SELECT records_cleared FROM paw_workspace_state WHERE id = 1');
+      return sendJson(response, 200, {
+        applications: isAdmin(identity) ? await readApplications(client) : [],
+        recordsCleared: Number(state.rows[0]?.records_cleared || 0) === 1,
+      });
     }
 
     if (request.method === 'DELETE') {
       if (!isAdmin(identity)) return sendJson(response, 403, { error: 'Admin access required.' });
-      await client.execute('DELETE FROM paw_adoption_applications');
+      await client.batch([
+        'DELETE FROM paw_adoption_applications',
+        "INSERT INTO paw_workspace_state (id, records_cleared, updated_at) VALUES (1, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now')) ON CONFLICT(id) DO UPDATE SET records_cleared = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+      ], 'write');
       return sendJson(response, 200, { cleared: true });
     }
 

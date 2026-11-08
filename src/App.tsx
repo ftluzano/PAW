@@ -31,6 +31,8 @@ type PublicPetPostUpdate = {
   post: PublicPetPost;
 } | {
   type: 'pet-posts-cleared';
+} | {
+  type: 'records-cleared';
 };
 
 const PUBLIC_POST_CHANNEL = 'paw-public-pet-posts';
@@ -96,7 +98,7 @@ async function applicationRequest(method: 'GET' | 'POST' | 'DELETE', body?: Reco
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-  const result = await response.json().catch(() => ({})) as { error?: string; applications?: AdoptionApplication[] };
+  const result = await response.json().catch(() => ({})) as { error?: string; applications?: AdoptionApplication[]; recordsCleared?: boolean };
   if (!response.ok) throw new Error(result.error || 'Could not save the adoption application.');
   return result;
 }
@@ -162,6 +164,10 @@ export default function App() {
     const handlePostUpdate = (event: MessageEvent<PublicPetPostUpdate>) => {
       if (event.data?.type === 'pet-posts-cleared') {
         setAnimals((prev) => prev.filter((animal) => !PUBLIC_POST_STATUSES.has(animal.status)));
+      } else if (event.data?.type === 'records-cleared') {
+        setAnimals((prev) => prev.filter((animal) => PUBLIC_POST_STATUSES.has(animal.status)));
+        setApplications([]);
+        setFollowUps([]);
       } else if (event.data?.type === 'pet-post-updated' && event.data.post?.id) {
         const updatedPost = event.data.post;
         setAnimals((prev) => prev.some((animal) => animal.id === updatedPost.id)
@@ -239,7 +245,7 @@ export default function App() {
   }, [currentUser?.id, currentUser?.role]);
 
   useEffect(() => {
-    if (currentUser?.role !== 'admin') return;
+    if (!currentUser) return;
     let active = true;
     let requestInFlight = false;
     const loadApplications = async () => {
@@ -247,8 +253,12 @@ export default function App() {
       requestInFlight = true;
       try {
         const result = await applicationRequest('GET');
-        if (active && Array.isArray(result.applications)) {
+        if (active && currentUser.role === 'admin' && Array.isArray(result.applications)) {
           setApplications(result.applications);
+        }
+        if (active && result.recordsCleared) {
+          setAnimals((previous) => previous.filter((animal) => PUBLIC_POST_STATUSES.has(animal.status)));
+          setFollowUps([]);
         }
       } catch {
         // Keep the demo applications visible if Turso is briefly unavailable.
@@ -315,12 +325,11 @@ export default function App() {
   };
 
   const handleClearAllRecords = async () => {
-    await authorizedPostRequest('DELETE');
     await applicationRequest('DELETE');
-    setAnimals([]);
+    setAnimals((previous) => previous.filter((animal) => PUBLIC_POST_STATUSES.has(animal.status)));
     setApplications([]);
     setFollowUps([]);
-    postUpdateChannel.current?.postMessage({ type: 'pet-posts-cleared' });
+    postUpdateChannel.current?.postMessage({ type: 'records-cleared' });
   };
 
   const handleMoveAnimalStage = (animalId: string, nextStatus: AnimalStatus) => {
