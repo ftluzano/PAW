@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
+import { onAuthStateChanged, signOut } from '@firebase/auth';
 import { User, Animal, AdoptionApplication, FollowUpCheckIn, AnimalStatus } from './types.ts';
 import { INITIAL_ANIMALS, INITIAL_APPLICATIONS, INITIAL_FOLLOW_UPS } from './data/initialData.ts';
 import { AuthScreen } from './components/AuthScreen.tsx';
@@ -18,6 +19,7 @@ import { PipelineBoard } from './components/PipelineBoard.tsx';
 import { AdminDashboard } from './components/AdminDashboard.tsx';
 import { Heart, ShieldCheck } from 'lucide-react';
 import { BrandLogo } from './components/BrandLogo.tsx';
+import { firebaseAuth, resolveFirebaseUser } from './firebase.ts';
 
 type PublicPetPost = Pick<Animal,
   'id' | 'name' | 'species' | 'breed' | 'age' | 'ageCategory' | 'gender' |
@@ -34,6 +36,7 @@ const PUBLIC_POST_CHANNEL = 'paw-public-pet-posts';
 export default function App() {
   // Authentication state - Starts on AuthScreen before entering mainscreen
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthInitializing, setIsAuthInitializing] = useState(Boolean(firebaseAuth));
 
   // Application Data States
   const [animals, setAnimals] = useState<Animal[]>(INITIAL_ANIMALS);
@@ -45,6 +48,42 @@ export default function App() {
   const [selectedWorkflowStatus, setSelectedWorkflowStatus] = useState<AnimalStatus | 'All'>('All');
   const [selectedAnimalForCare, setSelectedAnimalForCare] = useState<Animal | null>(null);
   const postUpdateChannel = useRef<BroadcastChannel | null>(null);
+
+  useEffect(() => {
+    if (!firebaseAuth) return;
+
+    let activeRequest = 0;
+    const unsubscribe = onAuthStateChanged(
+      firebaseAuth,
+      (firebaseUser) => {
+        const requestId = ++activeRequest;
+        if (!firebaseUser) {
+          setCurrentUser(null);
+          setIsAuthInitializing(false);
+          return;
+        }
+
+        void resolveFirebaseUser(firebaseUser).then((user) => {
+          if (requestId !== activeRequest) return;
+          setCurrentUser(user);
+          setActiveTab(user.role === 'admin' ? 'admin-dashboard' : user.role === 'staff' ? 'records' : 'browse');
+        }).catch(() => {
+          if (requestId === activeRequest) setCurrentUser(null);
+        }).finally(() => {
+          if (requestId === activeRequest) setIsAuthInitializing(false);
+        });
+      },
+      () => {
+        setCurrentUser(null);
+        setIsAuthInitializing(false);
+      }
+    );
+
+    return () => {
+      activeRequest += 1;
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof BroadcastChannel === 'undefined') return;
@@ -70,6 +109,7 @@ export default function App() {
   // Handle Authentication
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
+    setIsAuthInitializing(false);
     // Set appropriate initial tab based on role
     if (user.role === 'admin') {
       setActiveTab('admin-dashboard');
@@ -83,6 +123,7 @@ export default function App() {
   const handleLogout = () => {
     setCurrentUser(null);
     setSelectedWorkflowStatus('All');
+    if (firebaseAuth) void signOut(firebaseAuth);
   };
 
   // Animal Data Handlers
@@ -228,6 +269,15 @@ export default function App() {
     acc[animal.status] = (acc[animal.status] || 0) + 1;
     return acc;
   }, {} as Record<AnimalStatus, number>);
+
+  if (isAuthInitializing) {
+    return (
+      <div className="auth-screen min-h-screen flex flex-col items-center justify-center gap-5">
+        <BrandLogo size="large" />
+        <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/80 border-t-transparent" />
+      </div>
+    );
+  }
 
   // IF NOT AUTHENTICATED: Show AuthScreen
   if (!currentUser) {

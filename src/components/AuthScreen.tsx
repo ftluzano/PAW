@@ -3,7 +3,6 @@ import { User as PawUser, UserRole } from '../types.ts';
 import { FirebaseError } from '@firebase/app';
 import {
   createUserWithEmailAndPassword,
-  getIdTokenResult,
   signInWithEmailAndPassword,
   signInWithPopup,
   updateProfile,
@@ -12,7 +11,7 @@ import {
 import { ShieldCheck, Heart, Mail, LogIn, UserPlus, Sparkles, AlertCircle, ChevronRight } from 'lucide-react';
 import heroDog from '../assets/images/paw_dog_golden_mix_1794111872445.jpg';
 import { BrandLogo } from './BrandLogo.tsx';
-import { firebaseAuth, googleAuthProvider } from '../firebase.ts';
+import { firebaseAuth, googleAuthProvider, resolveFirebaseUser } from '../firebase.ts';
 
 interface AuthScreenProps {
   onLoginSuccess: (user: PawUser) => void;
@@ -27,26 +26,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const resolveSignedInUser = async (firebaseUser: FirebaseUser): Promise<PawUser> => {
-    const token = await getIdTokenResult(firebaseUser, true);
-    const claims = token.claims;
-    const role: UserRole = claims.admin === true || claims.role === 'admin'
-      ? 'admin'
-      : claims.staff === true || claims.role === 'staff'
-      ? 'staff'
-      : 'adopter';
-    const organization = typeof claims.organization === 'string' ? claims.organization : undefined;
-
-    return {
-      id: firebaseUser.uid,
-      name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'PAW user',
-      email: firebaseUser.email || '',
-      role,
-      organization,
-      avatarUrl: firebaseUser.photoURL || undefined,
-    };
-  };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,7 +58,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
         firebaseUser = credential.user;
       }
 
-      onLoginSuccess(await resolveSignedInUser(firebaseUser));
+      onLoginSuccess(await resolveFirebaseUser(firebaseUser, true));
     } catch (error) {
       if (error instanceof FirebaseError) {
         const messages: Record<string, string> = {
@@ -96,7 +75,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
         };
         setErrorMessage(messages[error.code] || 'Authentication failed. Please try again.');
       } else {
-        setErrorMessage('Authentication failed. Please try again.');
+        setErrorMessage(error instanceof Error ? error.message : 'Authentication failed. Please try again.');
       }
     } finally {
       setIsSubmitting(false);
@@ -113,7 +92,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
     setIsSubmitting(true);
     try {
       const credential = await signInWithPopup(firebaseAuth, googleAuthProvider);
-      onLoginSuccess(await resolveSignedInUser(credential.user));
+      onLoginSuccess(await resolveFirebaseUser(credential.user, true));
     } catch (error) {
       if (error instanceof FirebaseError) {
         const messages: Record<string, string> = {
@@ -125,7 +104,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
         };
         setErrorMessage(messages[error.code] || 'Google sign-in failed. Please try again.');
       } else {
-        setErrorMessage('Google sign-in failed. Please try again.');
+        setErrorMessage(error instanceof Error ? error.message : 'Google sign-in failed. Please try again.');
       }
     } finally {
       setIsSubmitting(false);
