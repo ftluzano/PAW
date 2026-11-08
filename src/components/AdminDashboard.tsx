@@ -11,6 +11,7 @@ interface AdminDashboardProps {
   onUpdateAnimal: (animal: Animal) => Promise<void>;
   onCreateAnimal: (animal: Animal) => Promise<void>;
   onClearPosts: () => Promise<void>;
+  onClearAll: () => Promise<void>;
   activeTab: string;
   onSelectTab: (tab: string) => void;
 }
@@ -45,6 +46,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onUpdateAnimal,
   onCreateAnimal,
   onClearPosts,
+  onClearAll,
   activeTab,
   onSelectTab,
 }) => {
@@ -78,6 +80,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       await onClearPosts();
     } catch (error) {
       setPostError(error instanceof Error ? error.message : 'Could not clear public posts.');
+    } finally {
+      setIsClearingPosts(false);
+    }
+  };
+
+  const clearAllRecords = async () => {
+    if (!window.confirm('Permanently remove all animal records, applications, follow-ups, and public posts for every user?')) return;
+    setIsClearingPosts(true);
+    setPostError('');
+    try {
+      await onClearAll();
+    } catch (error) {
+      setPostError(error instanceof Error ? error.message : 'Could not clear all records.');
     } finally {
       setIsClearingPosts(false);
     }
@@ -249,12 +264,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="flex justify-end">
             <button
               type="button"
-              disabled={isClearingPosts || publicPosts.length === 0}
-              onClick={() => void clearPublicPosts()}
+              disabled={isClearingPosts || (animals.length === 0 && applications.length === 0 && followUps.length === 0)}
+              onClick={() => void clearAllRecords()}
               className="inline-flex items-center gap-2 rounded-lg border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" />
-              {isClearingPosts ? 'Clearing…' : 'Clear All'}
+              {isClearingPosts ? 'Clearing…' : 'Clear All Records'}
             </button>
           </div>
           {postError && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-xs text-rose-800">{postError}</p>}
@@ -318,7 +333,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {postDraft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-2 backdrop-blur-sm sm:items-center sm:p-4">
           <form
             onSubmit={async (event) => {
               event.preventDefault();
@@ -336,7 +351,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 setIsSavingPost(false);
               }
             }}
-            className="w-full max-w-xl space-y-4 rounded-xl bg-white p-5 shadow-2xl"
+            className="my-2 flex min-h-0 w-full max-w-xl max-h-[calc(100dvh-1rem)] flex-col space-y-3 overflow-y-auto rounded-xl bg-white p-4 shadow-2xl sm:my-4 sm:max-h-[90vh] sm:space-y-4 sm:p-5"
             role="dialog"
             aria-modal="true"
             aria-labelledby="edit-post-title"

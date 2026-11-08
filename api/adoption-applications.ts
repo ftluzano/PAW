@@ -141,8 +141,14 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       return sendJson(response, 200, { applications: await readApplications(client) });
     }
 
+    if (request.method === 'DELETE') {
+      if (!isAdmin(identity)) return sendJson(response, 403, { error: 'Admin access required.' });
+      await client.execute('DELETE FROM paw_adoption_applications');
+      return sendJson(response, 200, { cleared: true });
+    }
+
     if (request.method !== 'POST') {
-      response.setHeader('Allow', 'GET, POST');
+      response.setHeader('Allow', 'GET, POST, DELETE');
       return sendJson(response, 405, { error: 'Method not allowed.' });
     }
 

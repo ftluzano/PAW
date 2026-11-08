@@ -85,7 +85,7 @@ async function authorizedPostRequest(method: 'POST' | 'DELETE', body?: Record<st
   return result;
 }
 
-async function applicationRequest(method: 'GET' | 'POST', body?: Record<string, unknown>) {
+async function applicationRequest(method: 'GET' | 'POST' | 'DELETE', body?: Record<string, unknown>) {
   const firebaseUser = firebaseAuth?.currentUser;
   if (!firebaseUser) throw new Error('Your sign-in session expired. Sign in again.');
   const response = await fetch('/api/adoption-applications', {
@@ -314,6 +314,15 @@ export default function App() {
     postUpdateChannel.current?.postMessage({ type: 'pet-posts-cleared' });
   };
 
+  const handleClearAllRecords = async () => {
+    await authorizedPostRequest('DELETE');
+    await applicationRequest('DELETE');
+    setAnimals([]);
+    setApplications([]);
+    setFollowUps([]);
+    postUpdateChannel.current?.postMessage({ type: 'pet-posts-cleared' });
+  };
+
   const handleMoveAnimalStage = (animalId: string, nextStatus: AnimalStatus) => {
     setAnimals((prev) =>
       prev.map((a) => (a.id === animalId ? { ...a, status: nextStatus } : a))
@@ -486,6 +495,7 @@ export default function App() {
             onUpdateAnimal={handleUpdateAnimalPost}
             onCreateAnimal={handleCreateAnimalPost}
             onClearPosts={handleClearPublicPosts}
+            onClearAll={handleClearAllRecords}
             activeTab={activeTab}
             onSelectTab={setActiveTab}
           />
