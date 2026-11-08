@@ -1,14 +1,21 @@
 import React, { useState } from 'react';
-import { User, UserRole } from '../types.ts';
+import { User as PawUser, UserRole } from '../types.ts';
 import { FirebaseError } from '@firebase/app';
-import { getIdTokenResult, signInWithPopup } from '@firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  getIdTokenResult,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  updateProfile,
+  type User as FirebaseUser,
+} from '@firebase/auth';
 import { ShieldCheck, Heart, Mail, LogIn, UserPlus, Sparkles, AlertCircle, ChevronRight } from 'lucide-react';
 import heroDog from '../assets/images/paw_dog_golden_mix_1794111872445.jpg';
 import { BrandLogo } from './BrandLogo.tsx';
 import { firebaseAuth, googleAuthProvider } from '../firebase.ts';
 
 interface AuthScreenProps {
-  onLoginSuccess: (user: User) => void;
+  onLoginSuccess: (user: PawUser) => void;
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
@@ -21,14 +28,29 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const resolveSignedInUser = async (firebaseUser: FirebaseUser): Promise<PawUser> => {
+    const token = await getIdTokenResult(firebaseUser, true);
+    const claims = token.claims;
+    const role: UserRole = claims.admin === true || claims.role === 'admin'
+      ? 'admin'
+      : claims.staff === true || claims.role === 'staff'
+      ? 'staff'
+      : 'adopter';
+    const organization = typeof claims.organization === 'string' ? claims.organization : undefined;
+
+    return {
+      id: firebaseUser.uid,
+      name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'PAW user',
+      email: firebaseUser.email || '',
+      role,
+      organization,
+      avatarUrl: firebaseUser.photoURL || undefined,
+    };
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
-
-    if (!import.meta.env.DEV) {
-      setErrorMessage('Sign-in is unavailable until Firebase Authentication is configured.');
-      return;
-    }
 
     if (!email || !password) {
       setErrorMessage('Please fill in both email and password.');
@@ -40,18 +62,45 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
       return;
     }
 
+    if (!firebaseAuth) {
+      setErrorMessage('Email sign-in is not configured. Check the Firebase web app settings in Vercel.');
+      return;
+    }
+
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
+      let firebaseUser: FirebaseUser;
+      if (mode === 'register') {
+        const credential = await createUserWithEmailAndPassword(firebaseAuth, email.trim(), password);
+        firebaseUser = credential.user;
+        await updateProfile(firebaseUser, { displayName: name.trim() });
+      } else {
+        const credential = await signInWithEmailAndPassword(firebaseAuth, email.trim(), password);
+        firebaseUser = credential.user;
+      }
+
+      onLoginSuccess(await resolveSignedInUser(firebaseUser));
+    } catch (error) {
+      if (error instanceof FirebaseError) {
+        const messages: Record<string, string> = {
+          'auth/invalid-credential': 'Email or password is incorrect.',
+          'auth/user-not-found': 'No account exists for this email.',
+          'auth/wrong-password': 'Email or password is incorrect.',
+          'auth/email-already-in-use': 'This email already has an account. Sign in instead.',
+          'auth/weak-password': 'Choose a password with at least 6 characters.',
+          'auth/invalid-email': 'Enter a valid email address.',
+          'auth/operation-not-allowed': 'Enable Email/Password in Firebase Authentication sign-in providers.',
+          'auth/user-disabled': 'This account has been disabled. Contact your organization administrator.',
+          'auth/too-many-requests': 'Too many attempts. Wait a moment and try again.',
+          'auth/network-request-failed': 'Network error. Check your connection and try again.',
+        };
+        setErrorMessage(messages[error.code] || 'Authentication failed. Please try again.');
+      } else {
+        setErrorMessage('Authentication failed. Please try again.');
+      }
+    } finally {
       setIsSubmitting(false);
-      const user: User = {
-        id: `user-${Date.now()}`,
-        name: mode === 'register' ? name : email.split('@')[0],
-        email: email,
-        role: 'adopter',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      };
-      onLoginSuccess(user);
-    }, 400);
+    }
   };
 
   const handleGoogleSignIn = async () => {
@@ -64,23 +113,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
     setIsSubmitting(true);
     try {
       const credential = await signInWithPopup(firebaseAuth, googleAuthProvider);
-      const token = await getIdTokenResult(credential.user, true);
-      const claims = token.claims;
-      const role: UserRole = claims.admin === true || claims.role === 'admin'
-        ? 'admin'
-        : claims.staff === true || claims.role === 'staff'
-        ? 'staff'
-        : 'adopter';
-      const organization = typeof claims.organization === 'string' ? claims.organization : undefined;
-
-      onLoginSuccess({
-        id: credential.user.uid,
-        name: credential.user.displayName || credential.user.email?.split('@')[0] || 'PAW user',
-        email: credential.user.email || '',
-        role,
-        organization,
-        avatarUrl: credential.user.photoURL || undefined,
-      });
+      onLoginSuccess(await resolveSignedInUser(credential.user));
     } catch (error) {
       if (error instanceof FirebaseError) {
         const messages: Record<string, string> = {
@@ -202,7 +235,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                 {mode === 'login' ? 'Sign In to PAW' : 'Create an Adopter Account'}
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Sign in with your Google account.
+                {mode === 'login' ? 'Sign in with Google or email.' : 'Register as an adopter with Google or email.'}
               </p>
             </div>
 

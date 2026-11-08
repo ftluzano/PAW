@@ -15,9 +15,8 @@ import { AdopterPortal } from './components/AdopterPortal.tsx';
 import { CareAndFollowUpsView } from './components/CareAndFollowUpsView.tsx';
 import { InCareHealthMonitoring } from './components/InCareHealthMonitoring.tsx';
 import { PipelineBoard } from './components/PipelineBoard.tsx';
-import { SystemScopeModal } from './components/SystemScopeModal.tsx';
 import { AdminDashboard } from './components/AdminDashboard.tsx';
-import { Info, Heart, ShieldCheck } from 'lucide-react';
+import { Heart, ShieldCheck } from 'lucide-react';
 import { BrandLogo } from './components/BrandLogo.tsx';
 
 type PublicPetPost = Pick<Animal,
@@ -44,7 +43,6 @@ export default function App() {
   // Navigation and Filter States
   const [activeTab, setActiveTab] = useState<string>('records');
   const [selectedWorkflowStatus, setSelectedWorkflowStatus] = useState<AnimalStatus | 'All'>('All');
-  const [isScopeModalOpen, setIsScopeModalOpen] = useState(false);
   const [selectedAnimalForCare, setSelectedAnimalForCare] = useState<Animal | null>(null);
   const postUpdateChannel = useRef<BroadcastChannel | null>(null);
 
@@ -248,7 +246,6 @@ export default function App() {
         user={currentUser}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onOpenScopeModal={() => setIsScopeModalOpen(true)}
         onLogout={handleLogout}
       />
 
@@ -343,6 +340,7 @@ export default function App() {
             followUps={followUps}
             onSubmitApplication={handleSubmitNewApplication}
             onSubmitFollowUpCheckIn={handleSubmitAdopterCheckIn}
+            onNavigate={setActiveTab}
             activeSubTab={
               activeTab === 'browse'
                 ? 'browse'
@@ -361,25 +359,10 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <BrandLogo tone="light" />
-            <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-700">Sample records</span>
           </div>
 
-          <div className="flex items-center gap-4 text-slate-500">
-            <button
-              onClick={() => setIsScopeModalOpen(true)}
-              className="hover:text-teal-700 transition-colors"
-            >
-              System scope
-            </button>
-          </div>
         </div>
       </footer>
-
-      {/* System Scope & Limitations Modal (From the attached PDF document) */}
-      <SystemScopeModal
-        isOpen={isScopeModalOpen}
-        onClose={() => setIsScopeModalOpen(false)}
-      />
     </div>
   );
 }

@@ -1,13 +1,12 @@
 import React from 'react';
 import { User, UserRole } from '../types.ts';
-import { LogOut, Info } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { BrandLogo } from './BrandLogo.tsx';
 
 interface HeaderProps {
   user: User;
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  onOpenScopeModal: () => void;
   onLogout: () => void;
 }
 
@@ -15,7 +14,6 @@ export const Header: React.FC<HeaderProps> = ({
   user,
   activeTab,
   setActiveTab,
-  onOpenScopeModal,
   onLogout,
 }) => {
   const isStaff = user.role === 'staff';
@@ -38,7 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
         { id: 'browse', label: 'Available Pets' },
         { id: 'my-applications', label: 'My Applications' },
         { id: 'adopter-followup', label: 'Post-Adoption Care' },
-        { id: 'care-guide', label: 'Responsible Adoption' },
+        { id: 'care-guide', label: 'Care Guide' },
       ];
 
   return (
@@ -48,9 +46,6 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Zone 1: Single element brand wordmark */}
         <div className="flex items-center gap-3 shrink-0">
           <BrandLogo />
-          <span className="rounded border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-300">
-            Demo
-          </span>
         </div>
 
         {/* Zone 2: 4-5 single-line navigation links */}
@@ -69,13 +64,6 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           ))}
           
-          <button
-            onClick={onOpenScopeModal}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-teal-300 whitespace-nowrap shrink-0 transition-colors"
-          >
-            <Info className="w-3.5 h-3.5" />
-            <span>Scope & Rules</span>
-          </button>
         </nav>
 
         {/* Zone 3: Account role and sign out */}
@@ -122,12 +110,6 @@ export const Header: React.FC<HeaderProps> = ({
             {link.label}
           </button>
         ))}
-        <button
-          onClick={onOpenScopeModal}
-          className="whitespace-nowrap px-2.5 py-1 rounded text-teal-400 bg-teal-950/60 border border-teal-800/50"
-        >
-          Scope
-        </button>
       </div>
     </header>
   );

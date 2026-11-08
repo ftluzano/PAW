@@ -10,6 +10,7 @@ interface AdopterPortalProps {
   onSubmitApplication: (app: AdoptionApplication) => void;
   onSubmitFollowUpCheckIn: (checkInId: string, notes: string, rating: number, vetDone: boolean) => void;
   activeSubTab?: string;
+  onNavigate: (tab: string) => void;
 }
 
 export const AdopterPortal: React.FC<AdopterPortalProps> = ({
@@ -20,10 +21,12 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
   onSubmitApplication,
   onSubmitFollowUpCheckIn,
   activeSubTab = 'browse',
+  onNavigate,
 }) => {
-  const [subTab, setSubTab] = useState<'browse' | 'my-applications' | 'follow-up' | 'care-guide'>(
-    (activeSubTab as any) || 'browse'
-  );
+  const subTab = (activeSubTab || 'browse') as 'browse' | 'my-applications' | 'follow-up' | 'care-guide';
+  const navigateToSubTab = (tab: 'browse' | 'my-applications' | 'follow-up' | 'care-guide') => {
+    onNavigate(tab === 'follow-up' ? 'adopter-followup' : tab);
+  };
 
   // Browse filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -98,7 +101,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
     setTimeout(() => {
       setSelectedPetForApply(null);
       setApplicationSuccess(false);
-      setSubTab('my-applications');
+      navigateToSubTab('my-applications');
     }, 1200);
   };
 
@@ -115,63 +118,6 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
   return (
     <div className="space-y-6">
       
-      {/* Sub-navigation tabs for Adopter Portal */}
-      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setSubTab('browse')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              subTab === 'browse'
-                ? 'bg-teal-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            Browse Available Pets ({availablePets.length})
-          </button>
-          <button
-            onClick={() => setSubTab('my-applications')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              subTab === 'my-applications'
-                ? 'bg-teal-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <span>My Applications</span>
-            {myApplications.length > 0 && (
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                subTab === 'my-applications' ? 'bg-white text-teal-800' : 'bg-slate-200 text-slate-800'
-              }`}>
-                {myApplications.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setSubTab('follow-up')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              subTab === 'follow-up'
-                ? 'bg-teal-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            Post-Adoption Care Hub
-          </button>
-          <button
-            onClick={() => setSubTab('care-guide')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              subTab === 'care-guide'
-                ? 'bg-teal-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            Responsible Adoption Guide
-          </button>
-        </div>
-
-        <div className="text-xs text-slate-500 hidden sm:block">
-          Logged in as <strong className="text-slate-800">{user.name}</strong>
-        </div>
-      </div>
-
       {/* VIEW 1: BROWSE AVAILABLE PETS */}
       {subTab === 'browse' && (
         <div className="space-y-6">
@@ -322,7 +268,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                 Browse our available companions and submit an application to start your adoption journey!
               </p>
               <button
-                onClick={() => setSubTab('browse')}
+                onClick={() => navigateToSubTab('browse')}
                 className="mt-4 px-4 py-2 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700"
               >
                 Browse Pets
