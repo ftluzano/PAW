@@ -31,6 +31,15 @@ function parseAdminEmails(): Set<string> {
   );
 }
 
+function parseAdminUids(): Set<string> {
+  return new Set(
+    (env.ADMIN_UIDS || '')
+      .split(/[\s,;]+/)
+      .map((uid) => uid.trim())
+      .filter(Boolean)
+  );
+}
+
 function getAdminAuth() {
   const serviceAccountValue = env.FIREBASE_SERVICE_ACCOUNT;
   if (!serviceAccountValue) throw new Error('FIREBASE_SERVICE_ACCOUNT is not configured.');
@@ -71,7 +80,8 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   if (!idToken) return jsonResponse(response, 401, { error: 'Sign in before syncing account access.' });
 
   const adminEmails = parseAdminEmails();
-  if (adminEmails.size === 0) {
+  const adminUids = parseAdminUids();
+  if (adminEmails.size === 0 && adminUids.size === 0) {
     return jsonResponse(response, 200, { admin: false, configured: false });
   }
 
@@ -79,16 +89,20 @@ export default async function handler(request: ApiRequest, response: ApiResponse
     const auth = getAdminAuth();
     const decodedToken = await auth.verifyIdToken(idToken, true);
     const email = decodedToken.email?.trim().toLowerCase();
-    if (!email) return jsonResponse(response, 403, { error: 'A verified email is required for account access.' });
+    const isAllowlistedByUid = adminUids.has(decodedToken.uid);
+    if (!email && !isAllowlistedByUid) {
+      return jsonResponse(response, 403, { error: 'A verified email or allowlisted Firebase UID is required for admin access.' });
+    }
 
     const userRecord = await auth.getUser(decodedToken.uid);
     const claims = { ...(userRecord.customClaims || {}) };
-    const isAllowlistedAdmin = adminEmails.has(email);
+    const isAllowlistedByEmail = email ? adminEmails.has(email) : false;
 
-    if (isAllowlistedAdmin && decodedToken.email_verified !== true) {
-      return jsonResponse(response, 403, { error: 'Verify the allowlisted email before admin access can be granted.' });
+    if (isAllowlistedByEmail && !isAllowlistedByUid && decodedToken.email_verified !== true) {
+      return jsonResponse(response, 403, { error: 'This allowlisted email is unverified. Verify it or add the Firebase UID to ADMIN_UIDS.' });
     }
 
+    const isAllowlistedAdmin = isAllowlistedByUid || isAllowlistedByEmail;
     if (isAllowlistedAdmin) {
       await auth.setCustomUserClaims(decodedToken.uid, {
         ...claims,

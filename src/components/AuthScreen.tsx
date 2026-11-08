@@ -48,19 +48,22 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
 
     setIsSubmitting(true);
     try {
-      let firebaseUser: FirebaseUser;
+      const credential = mode === 'register'
+        ? await createUserWithEmailAndPassword(firebaseAuth, email.trim(), password)
+        : await signInWithEmailAndPassword(firebaseAuth, email.trim(), password);
+
       if (mode === 'register') {
-        const credential = await createUserWithEmailAndPassword(firebaseAuth, email.trim(), password);
-        firebaseUser = credential.user;
-        await updateProfile(firebaseUser, { displayName: name.trim() });
-      } else {
-        const credential = await signInWithEmailAndPassword(firebaseAuth, email.trim(), password);
-        firebaseUser = credential.user;
+        await updateProfile(credential.user, { displayName: name.trim() });
       }
 
-      onLoginSuccess(await resolveFirebaseUser(firebaseUser, true));
+      onLoginSuccess(await resolveFirebaseUser(credential.user, true));
     } catch (error) {
-      if (error instanceof FirebaseError) {
+      const needsVerification = error instanceof Error &&
+        error.message.includes('This allowlisted email is unverified.');
+
+      if (needsVerification) {
+        setErrorMessage('This account needs a verified allowlisted email, or its Firebase UID must be added to ADMIN_UIDS in Vercel.');
+      } else if (error instanceof FirebaseError) {
         const messages: Record<string, string> = {
           'auth/invalid-credential': 'Email or password is incorrect.',
           'auth/user-not-found': 'No account exists for this email.',
@@ -103,8 +106,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
           'auth/network-request-failed': 'Network error. Check your connection and try again.',
         };
         setErrorMessage(messages[error.code] || 'Google sign-in failed. Please try again.');
+      } else if (error instanceof Error && error.message.includes('This allowlisted email is unverified.')) {
+        setErrorMessage('This account needs a verified allowlisted email, or its Firebase UID must be added to ADMIN_UIDS in Vercel.');
       } else {
-        setErrorMessage(error instanceof Error ? error.message : 'Google sign-in failed. Please try again.');
+        setErrorMessage('Google sign-in failed. Please try again.');
       }
     } finally {
       setIsSubmitting(false);
