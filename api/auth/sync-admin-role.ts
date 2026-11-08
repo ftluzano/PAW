@@ -1,13 +1,6 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { env } from 'node:process';
-
-type ApiRequest = IncomingMessage;
-type ApiResponse = ServerResponse & {
-  status: (code: number) => ApiResponse;
-  json: (body: Record<string, unknown>) => void;
-};
 
 type ServiceAccount = {
   project_id?: string;
@@ -16,6 +9,17 @@ type ServiceAccount = {
 };
 
 const ADMIN_APP_NAME = 'paw-admin-role-sync';
+
+function jsonResponse(status: number, body: Record<string, unknown>, headers: HeadersInit = {}): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'application/json; charset=utf-8',
+      ...headers,
+    },
+  });
+}
 
 function parseAdminEmails(): Set<string> {
   return new Set(
@@ -52,35 +56,34 @@ function getAdminAuth() {
   return getAuth(app);
 }
 
-export default async function handler(request: ApiRequest, response: ApiResponse) {
+export default async function handler(request: Request): Promise<Response> {
   if (request.method !== 'POST') {
-    response.setHeader('Allow', 'POST');
-    return response.status(405).json({ error: 'Method not allowed.' });
+    return jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'POST' });
   }
 
-  const authorization = request.headers.authorization;
-  const idToken = typeof authorization === 'string' && authorization.startsWith('Bearer ')
-    ? authorization.slice('Bearer '.length)
+  const authorization = request.headers.get('authorization');
+  const idToken = authorization?.toLowerCase().startsWith('bearer ')
+    ? authorization.slice('Bearer '.length).trim()
     : '';
-  if (!idToken) return response.status(401).json({ error: 'Sign in before syncing account access.' });
+  if (!idToken) return jsonResponse(401, { error: 'Sign in before syncing account access.' });
 
   const adminEmails = parseAdminEmails();
   if (adminEmails.size === 0) {
-    return response.status(200).json({ admin: false, configured: false });
+    return jsonResponse(200, { admin: false, configured: false });
   }
 
   try {
     const auth = getAdminAuth();
     const decodedToken = await auth.verifyIdToken(idToken, true);
     const email = decodedToken.email?.trim().toLowerCase();
-    if (!email) return response.status(403).json({ error: 'A verified email is required for account access.' });
+    if (!email) return jsonResponse(403, { error: 'A verified email is required for account access.' });
 
     const userRecord = await auth.getUser(decodedToken.uid);
     const claims = { ...(userRecord.customClaims || {}) };
     const isAllowlistedAdmin = adminEmails.has(email);
 
     if (isAllowlistedAdmin && decodedToken.email_verified !== true) {
-      return response.status(403).json({ error: 'Verify the allowlisted email before admin access can be granted.' });
+      return jsonResponse(403, { error: 'Verify the allowlisted email before admin access can be granted.' });
     }
 
     if (isAllowlistedAdmin) {
@@ -89,7 +92,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
         admin: true,
         role: 'admin',
       });
-      return response.status(200).json({ admin: true });
+      return jsonResponse(200, { admin: true });
     }
 
     if (claims.admin === true || claims.role === 'admin') {
@@ -101,12 +104,12 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       await auth.setCustomUserClaims(decodedToken.uid, claims);
     }
 
-    return response.status(200).json({ admin: false });
+    return jsonResponse(200, { admin: false });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown server error.';
     if (message.includes('FIREBASE_SERVICE_ACCOUNT')) {
-      return response.status(503).json({ error: message });
+      return jsonResponse(503, { error: message });
     }
-    return response.status(401).json({ error: 'Unable to verify this Firebase session.' });
+    return jsonResponse(401, { error: 'Unable to verify this Firebase session.' });
   }
 }
