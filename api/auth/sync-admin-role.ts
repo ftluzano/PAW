@@ -1,6 +1,13 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { env } from 'node:process';
+
+type ApiRequest = IncomingMessage;
+type ApiResponse = ServerResponse & {
+  status: (code: number) => ApiResponse;
+  json: (body: Record<string, unknown>) => void;
+};
 
 type ServiceAccount = {
   project_id?: string;
@@ -10,15 +17,9 @@ type ServiceAccount = {
 
 const ADMIN_APP_NAME = 'paw-admin-role-sync';
 
-function jsonResponse(status: number, body: Record<string, unknown>, headers: HeadersInit = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      'Cache-Control': 'no-store',
-      'Content-Type': 'application/json; charset=utf-8',
-      ...headers,
-    },
-  });
+function jsonResponse(response: ApiResponse, status: number, body: Record<string, unknown>): void {
+  response.setHeader('Cache-Control', 'no-store');
+  response.status(status).json(body);
 }
 
 function parseAdminEmails(): Set<string> {
@@ -56,34 +57,36 @@ function getAdminAuth() {
   return getAuth(app);
 }
 
-export default async function handler(request: Request): Promise<Response> {
+export default async function handler(request: ApiRequest, response: ApiResponse): Promise<void> {
   if (request.method !== 'POST') {
-    return jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'POST' });
+    response.setHeader('Allow', 'POST');
+    return jsonResponse(response, 405, { error: 'Method not allowed.' });
   }
 
-  const authorization = request.headers.get('authorization');
-  const idToken = authorization?.toLowerCase().startsWith('bearer ')
-    ? authorization.slice('Bearer '.length).trim()
+  const authorization = request.headers.authorization;
+  const bearerHeader = Array.isArray(authorization) ? authorization[0] : authorization;
+  const idToken = bearerHeader?.toLowerCase().startsWith('bearer ')
+    ? bearerHeader.slice('Bearer '.length).trim()
     : '';
-  if (!idToken) return jsonResponse(401, { error: 'Sign in before syncing account access.' });
+  if (!idToken) return jsonResponse(response, 401, { error: 'Sign in before syncing account access.' });
 
   const adminEmails = parseAdminEmails();
   if (adminEmails.size === 0) {
-    return jsonResponse(200, { admin: false, configured: false });
+    return jsonResponse(response, 200, { admin: false, configured: false });
   }
 
   try {
     const auth = getAdminAuth();
     const decodedToken = await auth.verifyIdToken(idToken, true);
     const email = decodedToken.email?.trim().toLowerCase();
-    if (!email) return jsonResponse(403, { error: 'A verified email is required for account access.' });
+    if (!email) return jsonResponse(response, 403, { error: 'A verified email is required for account access.' });
 
     const userRecord = await auth.getUser(decodedToken.uid);
     const claims = { ...(userRecord.customClaims || {}) };
     const isAllowlistedAdmin = adminEmails.has(email);
 
     if (isAllowlistedAdmin && decodedToken.email_verified !== true) {
-      return jsonResponse(403, { error: 'Verify the allowlisted email before admin access can be granted.' });
+      return jsonResponse(response, 403, { error: 'Verify the allowlisted email before admin access can be granted.' });
     }
 
     if (isAllowlistedAdmin) {
@@ -92,7 +95,7 @@ export default async function handler(request: Request): Promise<Response> {
         admin: true,
         role: 'admin',
       });
-      return jsonResponse(200, { admin: true });
+      return jsonResponse(response, 200, { admin: true });
     }
 
     if (claims.admin === true || claims.role === 'admin') {
@@ -104,12 +107,12 @@ export default async function handler(request: Request): Promise<Response> {
       await auth.setCustomUserClaims(decodedToken.uid, claims);
     }
 
-    return jsonResponse(200, { admin: false });
+    return jsonResponse(response, 200, { admin: false });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown server error.';
     if (message.includes('FIREBASE_SERVICE_ACCOUNT')) {
-      return jsonResponse(503, { error: message });
+      return jsonResponse(response, 503, { error: message });
     }
-    return jsonResponse(401, { error: 'Unable to verify this Firebase session.' });
+    return jsonResponse(response, 401, { error: 'Unable to verify this Firebase session.' });
   }
 }
