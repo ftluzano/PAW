@@ -1,0 +1,6 @@
+{
+  "name": "PAW - Pet Adoption & Care System",
+  "description": "Centralized digital platform for animal shelters, rescue groups, and adopters to manage rescue intake, medical records, adoption workflows, and post-adoption care.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
