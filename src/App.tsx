@@ -63,7 +63,7 @@ export default function App() {
           return;
         }
 
-        void resolveFirebaseUser(firebaseUser).then((user) => {
+        void resolveFirebaseUser(firebaseUser, true).then((user) => {
           if (requestId !== activeRequest) return;
           setCurrentUser(user);
           setActiveTab(user.role === 'admin' ? 'admin-dashboard' : user.role === 'staff' ? 'records' : 'browse');
