@@ -9,6 +9,7 @@ interface AdminDashboardProps {
   applications: AdoptionApplication[];
   followUps: FollowUpCheckIn[];
   onUpdateAnimal: (animal: Animal) => Promise<void>;
+  onCreateAnimal: (animal: Animal) => Promise<void>;
   onClearPosts: () => Promise<void>;
   activeTab: string;
   onSelectTab: (tab: string) => void;
@@ -42,11 +43,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   applications,
   followUps,
   onUpdateAnimal,
+  onCreateAnimal,
   onClearPosts,
   activeTab,
   onSelectTab,
 }) => {
   const [postDraft, setPostDraft] = useState<Animal | null>(null);
+  const [isCreatingPost, setIsCreatingPost] = useState(false);
   const [postError, setPostError] = useState('');
   const [isSavingPost, setIsSavingPost] = useState(false);
   const [isClearingPosts, setIsClearingPosts] = useState(false);
@@ -66,6 +69,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const publicPosts = animals.filter((animal) =>
     ['Listed for Adoption', 'Application', 'Review & Match'].includes(animal.status)
   );
+
+  const clearPublicPosts = async () => {
+    if (!window.confirm(`Permanently remove all ${publicPosts.length} public pet posts for every user? Medical records and applications will remain.`)) return;
+    setIsClearingPosts(true);
+    setPostError('');
+    try {
+      await onClearPosts();
+    } catch (error) {
+      setPostError(error instanceof Error ? error.message : 'Could not clear public posts.');
+    } finally {
+      setIsClearingPosts(false);
+    }
+  };
+
+  const createPostDraft = (): Animal => ({
+    id: `paw-${Date.now()}`,
+    name: '', species: 'Dog', breed: '', age: '1 year', ageCategory: 'Young', gender: 'Female',
+    weightLbs: 20, size: 'Medium', intakeType: 'Rescued', intakeDate: new Date().toISOString().split('T')[0],
+    intakeLocation: 'PAW adoption program', intakeNotes: '', photoUrl: '', status: 'Listed for Adoption',
+    healthStatus: 'Healthy / Stable', story: '', temperament: [], neuteredSpayed: false, microchipId: '',
+    medicalHistory: [], illnessIncidents: [], dailyHealthChecks: [], vaccinations: [], treatments: [], careNotes: [],
+  });
 
   const exportReport = () => {
     const report = {
@@ -164,19 +189,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="flex justify-end">
             <button
               type="button"
-              disabled={isClearingPosts || publicPosts.length === 0}
-              onClick={async () => {
-                if (!window.confirm(`Permanently remove all ${publicPosts.length} public pet posts for every user? Medical records and applications will remain.`)) return;
-                setIsClearingPosts(true);
+              onClick={() => {
                 setPostError('');
-                try {
-                  await onClearPosts();
-                } catch (error) {
-                  setPostError(error instanceof Error ? error.message : 'Could not clear public posts.');
-                } finally {
-                  setIsClearingPosts(false);
-                }
+                setIsCreatingPost(true);
+                setPostDraft(createPostDraft());
               }}
+              className="mr-2 inline-flex items-center gap-2 rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-teal-800"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Add pet post
+            </button>
+            <button
+              type="button"
+              disabled={isClearingPosts || publicPosts.length === 0}
+              onClick={() => void clearPublicPosts()}
               className="inline-flex items-center gap-2 rounded-lg border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -206,7 +232,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <p className="line-clamp-2 text-xs leading-relaxed text-slate-600">{animal.story}</p>
                     <button
                       type="button"
-                      onClick={() => setPostDraft(animal)}
+                      onClick={() => { setIsCreatingPost(false); setPostDraft(animal); }}
                       className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -219,20 +245,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           )}
         </section>
       ) : isReportsView ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-teal-700" />
-            <h2 className="text-sm font-bold text-slate-900">Workflow report</h2>
+        <div className="space-y-3">
+          <div className="flex justify-end">
+            <button
+              type="button"
+              disabled={isClearingPosts || publicPosts.length === 0}
+              onClick={() => void clearPublicPosts()}
+              className="inline-flex items-center gap-2 rounded-lg border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {isClearingPosts ? 'Clearing…' : 'Clear All'}
+            </button>
           </div>
-          <div className="mt-4 divide-y divide-slate-100">
-            {WORKFLOW_STAGES.map((stage) => (
-              <div key={stage.id} className="flex items-center justify-between py-3 text-sm">
-                <span className="text-slate-600">{stage.label}</span>
-                <span className="font-mono font-semibold tabular-nums text-slate-900">{stageCounts[stage.id] || 0}</span>
-              </div>
-            ))}
+          {postError && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-xs text-rose-800">{postError}</p>}
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-teal-700" />
+              <h2 className="text-sm font-bold text-slate-900">Workflow report</h2>
+            </div>
+            <div className="mt-4 divide-y divide-slate-100">
+              {WORKFLOW_STAGES.map((stage) => (
+                <div key={stage.id} className="flex items-center justify-between py-3 text-sm">
+                  <span className="text-slate-600">{stage.label}</span>
+                  <span className="font-mono font-semibold tabular-nums text-slate-900">{stageCounts[stage.id] || 0}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-xs text-slate-500">The report downloads as a JSON snapshot of the current demo workspace.</p>
           </div>
-          <p className="mt-4 text-xs text-slate-500">The report downloads as a JSON snapshot of the current demo workspace.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
@@ -285,8 +325,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               setIsSavingPost(true);
               setPostError('');
               try {
-                await onUpdateAnimal(postDraft);
+                if (!postDraft.photoUrl) throw new Error('Upload a pet image before saving this post.');
+                if (isCreatingPost) await onCreateAnimal(postDraft);
+                else await onUpdateAnimal(postDraft);
                 setPostDraft(null);
+                setIsCreatingPost(false);
               } catch (error) {
                 setPostError(error instanceof Error ? error.message : 'Could not save this post.');
               } finally {
@@ -300,10 +343,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div>
-                <h2 id="edit-post-title" className="font-bold text-slate-900">Edit pet post</h2>
+                <h2 id="edit-post-title" className="font-bold text-slate-900">{isCreatingPost ? 'Add pet post' : 'Edit pet post'}</h2>
                 <p className="text-xs text-slate-500">Changes update the adopter listing.</p>
               </div>
-              <button type="button" onClick={() => setPostDraft(null)} aria-label="Close editor" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100">
+              <button type="button" onClick={() => { setPostDraft(null); setIsCreatingPost(false); }} aria-label="Close editor" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -415,8 +458,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </label>
 
             <div className="flex justify-end gap-2 border-t border-slate-200 pt-3">
-              <button type="button" disabled={isSavingPost} onClick={() => setPostDraft(null)} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">Cancel</button>
-              <button type="submit" disabled={isSavingPost} className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-wait disabled:opacity-60">{isSavingPost ? 'Saving…' : 'Save changes'}</button>
+              <button type="button" disabled={isSavingPost} onClick={() => { setPostDraft(null); setIsCreatingPost(false); }} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">Cancel</button>
+              <button type="submit" disabled={isSavingPost} className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-wait disabled:opacity-60">{isSavingPost ? 'Saving…' : isCreatingPost ? 'Publish post' : 'Save changes'}</button>
             </div>
           </form>
         </div>

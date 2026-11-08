@@ -20,23 +20,23 @@ export const Header: React.FC<HeaderProps> = ({
 
   const navLinks = user.role === 'admin'
     ? [
-        { id: 'admin-dashboard', label: 'Overview' },
-        { id: 'admin-posts', label: 'Pet Posts' },
-        { id: 'admin-reports', label: 'Reports' },
+        { id: 'admin-dashboard', label: 'OVERVIEW' },
+        { id: 'admin-posts', label: 'PET POSTS' },
+        { id: 'admin-reports', label: 'REPORTS' },
       ]
     : isStaff
     ? [
-        { id: 'records', label: 'Animal Records' },
-        { id: 'clinical', label: 'In-Care Health Monitoring' },
-        { id: 'pipeline', label: 'Adoption Pipeline' },
-        { id: 'applications', label: 'Review Applications' },
-        { id: 'followups', label: 'Follow-ups & Reports' },
+        { id: 'records', label: 'ANIMAL RECORDS' },
+        { id: 'clinical', label: 'IN-CARE HEALTH MONITORING' },
+        { id: 'pipeline', label: 'ADOPTION PIPELINE' },
+        { id: 'applications', label: 'REVIEW APPLICATIONS' },
+        { id: 'followups', label: 'FOLLOW-UPS & REPORTS' },
       ]
     : [
-        { id: 'browse', label: 'Available Pets' },
-        { id: 'my-applications', label: 'My Applications' },
-        { id: 'adopter-followup', label: 'Post-Adoption Care' },
-        { id: 'care-guide', label: 'Care Guide' },
+        { id: 'browse', label: 'AVAILABLE PETS' },
+        { id: 'my-applications', label: 'MY APPLICATIONS' },
+        { id: 'adopter-followup', label: 'POST-ADOPTION CARE' },
+        { id: 'care-guide', label: 'CARE GUIDE' },
       ];
 
   return (

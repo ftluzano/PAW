@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Animal, AdoptionApplication, FollowUpCheckIn, User, Species } from '../types.ts';
 import { Heart, Search, ShieldCheck, CheckCircle2, AlertCircle, Calendar, Clock, Home, X, Sparkles, Send, PawPrint, Eye, FileText, Stethoscope } from 'lucide-react';
 
@@ -7,7 +7,7 @@ interface AdopterPortalProps {
   animals: Animal[];
   applications: AdoptionApplication[];
   followUps: FollowUpCheckIn[];
-  onSubmitApplication: (app: AdoptionApplication) => void;
+  onSubmitApplication: (app: AdoptionApplication) => Promise<void>;
   onSubmitFollowUpCheckIn: (checkInId: string, notes: string, rating: number, vetDone: boolean) => void;
   activeSubTab?: string;
   onNavigate: (tab: string) => void;
@@ -34,16 +34,28 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
   const [selectedPetForDetail, setSelectedPetForDetail] = useState<Animal | null>(null);
   const [selectedPetForApply, setSelectedPetForApply] = useState<Animal | null>(null);
 
+  useEffect(() => {
+    const modalIsOpen = Boolean(selectedPetForDetail || selectedPetForApply);
+    if (!modalIsOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [selectedPetForDetail, selectedPetForApply]);
+
   // Application Form States
-  const [homeType, setHomeType] = useState<'House with yard' | 'Apartment' | 'Condo' | 'Townhouse' | 'Rural/Farm'>('House with yard');
-  const [ownOrRent, setOwnOrRent] = useState<'Own' | 'Rent'>('Own');
-  const [hasOtherPets, setHasOtherPets] = useState(false);
+  const [homeType, setHomeType] = useState<'House with yard' | 'Apartment' | 'Condo' | 'Townhouse' | 'Rural/Farm' | ''>('');
+  const [ownOrRent, setOwnOrRent] = useState<'Own' | 'Rent' | ''>('');
+  const [hasOtherPets, setHasOtherPets] = useState<boolean | null>(null);
   const [otherPetsDetails, setOtherPetsDetails] = useState('');
-  const [hoursAloneDaily, setHoursAloneDaily] = useState(4);
-  const [petExperience, setPetExperience] = useState('Experienced with rescue pets for 8+ years.');
-  const [motivation, setMotivation] = useState('We are excited to provide a warm, loving, lifelong home with plenty of attention and exercise.');
-  const [applicantPhone, setApplicantPhone] = useState('(555) 234-8901');
+  const [hoursAloneDaily, setHoursAloneDaily] = useState<number | ''>('');
+  const [applicantName, setApplicantName] = useState('');
+  const [petExperience, setPetExperience] = useState('');
+  const [motivation, setMotivation] = useState('');
+  const [applicantPhone, setApplicantPhone] = useState('');
   const [applicationSuccess, setApplicationSuccess] = useState(false);
+  const [applicationError, setApplicationError] = useState('');
 
   // Follow-up check-in state
   const [checkInId, setCheckInId] = useState('');
@@ -73,21 +85,41 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
   const activeFollowUps = myFollowUps.filter((followUp) => followUp.status === 'Pending' || followUp.status === 'Overdue');
   const activeFollowUp = activeFollowUps.find((followUp) => followUp.id === checkInId) || activeFollowUps[0];
 
-  const handleApplySubmit = (e: React.FormEvent) => {
+  const resetApplicationForm = () => {
+    setHomeType('');
+    setOwnOrRent('');
+    setHasOtherPets(null);
+    setOtherPetsDetails('');
+    setHoursAloneDaily('');
+    setApplicantName('');
+    setPetExperience('');
+    setMotivation('');
+    setApplicantPhone('');
+    setApplicationError('');
+  };
+
+  const openApplication = (pet: Animal) => {
+    resetApplicationForm();
+    setSelectedPetForApply(pet);
+  };
+
+  const handleApplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPetForApply) return;
+    if (!homeType || !ownOrRent || hasOtherPets === null || hoursAloneDaily === '') return;
+    setApplicationError('');
 
     const newApp: AdoptionApplication = {
       id: `app-${Date.now().toString().slice(-4)}`,
       petId: selectedPetForApply.id,
       petName: selectedPetForApply.name,
       applicantId: user.id,
-      applicantName: user.name,
+      applicantName,
       applicantEmail: user.email,
       applicantPhone: applicantPhone,
       homeType: homeType,
       ownOrRent: ownOrRent,
-      hasOtherPets: hasOtherPets,
+      hasOtherPets,
       otherPetsDetails: hasOtherPets ? otherPetsDetails : undefined,
       hoursAloneDaily: Number(hoursAloneDaily),
       petExperience: petExperience,
@@ -96,8 +128,13 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
       submissionDate: new Date().toISOString().split('T')[0],
     };
 
-    onSubmitApplication(newApp);
-    setApplicationSuccess(true);
+    try {
+      await onSubmitApplication(newApp);
+      setApplicationSuccess(true);
+    } catch (error) {
+      setApplicationError(error instanceof Error ? error.message : 'Could not submit the application.');
+      return;
+    }
     setTimeout(() => {
       setSelectedPetForApply(null);
       setApplicationSuccess(false);
@@ -116,14 +153,14 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       
       {/* VIEW 1: BROWSE AVAILABLE PETS */}
       {subTab === 'browse' && (
         <div className="space-y-6">
           
           {/* Search & Species filter bar */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-3 bg-white p-2.5 sm:p-3.5 rounded-xl border border-slate-200">
             <div className="relative w-full sm:w-80">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -151,7 +188,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
           </div>
 
           {/* Pet Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {filteredPets.map((pet) => (
               <div
                 key={pet.id}
@@ -159,7 +196,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
               >
                 <div>
                   {/* Photo Container */}
-                  <div className="relative h-56 w-full bg-slate-100 overflow-hidden">
+                  <div className="relative h-44 sm:h-56 w-full bg-slate-100 overflow-hidden">
                     <img
                       src={pet.photoUrl}
                       alt={pet.name}
@@ -187,7 +224,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                   </div>
 
                   {/* Pet Info */}
-                  <div className="p-5 space-y-3">
+                  <div className="p-4 sm:p-5 space-y-2.5 sm:space-y-3">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-bold text-slate-900">{pet.name}</h3>
                       <span className="text-xs text-slate-500 font-mono tabular-nums">{pet.weightLbs} lbs</span>
@@ -228,7 +265,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                 </div>
 
                 {/* Card CTA Buttons */}
-                <div className="p-5 pt-0 grid grid-cols-2 gap-2">
+                <div className="p-4 pt-0 sm:p-5 sm:pt-0 grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setSelectedPetForDetail(pet)}
                     className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5"
@@ -238,7 +275,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                   </button>
 
                   <button
-                    onClick={() => setSelectedPetForApply(pet)}
+                    onClick={() => openApplication(pet)}
                     className="py-2 px-3 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm"
                   >
                     <Heart className="w-3.5 h-3.5" />
@@ -531,16 +568,16 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
 
       {/* VIEW 4: RESPONSIBLE ADOPTION GUIDE */}
       {subTab === 'care-guide' && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 space-y-6">
-          <div className="border-b border-slate-200 pb-4">
+        <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 space-y-4 sm:space-y-6">
+          <div className="border-b border-slate-200 pb-3 sm:pb-4">
             <h3 className="text-lg font-bold text-slate-900">The PAW Responsible Adoption Standard</h3>
             <p className="text-xs text-slate-500 mt-1">
               From rescue to loving forever home: what every pet parent needs to know.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs text-slate-700">
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-5 text-xs text-slate-700">
+            <div className="p-3 sm:p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
               <h4 className="font-bold text-slate-900 text-sm">The 3-3-3 Rule</h4>
               <p className="leading-relaxed">
                 <strong>3 Days:</strong> Pet may feel overwhelmed, decompressing from shelter environment.
@@ -553,7 +590,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
               </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <div className="p-3 sm:p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
               <h4 className="font-bold text-slate-900 text-sm">Medical Diligence</h4>
               <p className="leading-relaxed">
                 While PAW maintains full shelter records, schedule an initial visit with your local licensed veterinarian within 14 days of adoption.
@@ -563,7 +600,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
               </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <div className="p-3 sm:p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
               <h4 className="font-bold text-slate-900 text-sm">Lifelong Commitment</h4>
               <p className="leading-relaxed">
                 Adopting a pet is a 10-15+ year journey. PAW provides ongoing follow-ups, advice, and shelter alumni check-ins throughout your companion's life.
@@ -575,9 +612,9 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
 
       {/* MODAL: VIEW DETAILED PET PROFILE */}
       {selectedPetForDetail && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden border border-slate-200">
-            <div className="relative h-64 w-full bg-slate-900">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-white rounded-xl sm:rounded-2xl w-full max-w-2xl max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] shadow-2xl flex min-h-0 flex-col overflow-hidden border border-slate-200">
+            <div className="relative h-40 sm:h-56 shrink-0 w-full bg-slate-900">
               <img
                 src={selectedPetForDetail.photoUrl}
                 alt={selectedPetForDetail.name}
@@ -591,7 +628,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto space-y-4 text-xs text-slate-700">
+            <div className="min-h-0 overflow-y-auto p-4 sm:p-6 space-y-3 sm:space-y-4 text-xs text-slate-700">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div>
                   <h3 className="text-xl font-bold text-slate-900">{selectedPetForDetail.name}</h3>
@@ -618,7 +655,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                   <ShieldCheck className="w-4 h-4 text-teal-700" />
                   Medical Record Transparency
                 </h4>
-                <div className="grid grid-cols-2 gap-2 text-[11px] text-teal-900">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-teal-900">
                   <p>✓ Microchip registered (#{selectedPetForDetail.microchipId.slice(-6)})</p>
                   <p>✓ {selectedPetForDetail.neuteredSpayed ? 'Spayed / Neutered' : 'Surgery Arranged'}</p>
                   <p>✓ Vaccinations verified ({selectedPetForDetail.vaccinations.length} on file)</p>
@@ -637,7 +674,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                   onClick={() => {
                     const pet = selectedPetForDetail;
                     setSelectedPetForDetail(null);
-                    setSelectedPetForApply(pet);
+                    openApplication(pet);
                   }}
                   className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg shadow-sm"
                 >
@@ -651,9 +688,9 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
 
       {/* MODAL: SUBMIT ADOPTION APPLICATION */}
       {selectedPetForApply && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden border border-slate-200">
-            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-white rounded-xl sm:rounded-2xl w-full max-w-2xl max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] shadow-2xl flex min-h-0 flex-col overflow-hidden border border-slate-200">
+            <div className="bg-slate-900 text-white px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-base">Adoption Application for {selectedPetForApply.name}</h3>
                 <p className="text-xs text-slate-400">Step 4 in the PAW Adoption Workflow</p>
@@ -666,7 +703,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleApplySubmit} className="p-6 overflow-y-auto space-y-4 text-xs">
+            <form onSubmit={handleApplySubmit} className="min-h-0 overflow-y-auto p-4 sm:p-6 space-y-3 sm:space-y-4 text-xs">
               {applicationSuccess ? (
                 <div className="p-8 text-center space-y-2">
                   <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
@@ -688,8 +725,10 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                       <label className="block font-semibold text-slate-700 mb-1">Your Full Name</label>
                       <input
                         type="text"
-                        disabled
-                        value={user.name}
+                        required
+                        value={applicantName}
+                        onChange={(e) => setApplicantName(e.target.value)}
+                        placeholder="Enter your full name"
                         className="w-full px-3 py-1.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-600"
                       />
                     </div>
@@ -709,9 +748,11 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                       <label className="block font-semibold text-slate-700 mb-1">Housing Type</label>
                       <select
                         value={homeType}
-                        onChange={(e) => setHomeType(e.target.value as any)}
+                        required
+                        onChange={(e) => setHomeType(e.target.value as typeof homeType)}
                         className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-slate-900"
                       >
+                        <option value="">Select housing type</option>
                         <option value="House with yard">House with fenced yard</option>
                         <option value="Apartment">Apartment</option>
                         <option value="Condo">Condo</option>
@@ -742,6 +783,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                           Rent (Permitted)
                         </button>
                       </div>
+                      <input type="hidden" required value={ownOrRent} aria-label="Home ownership" />
                     </div>
                   </div>
 
@@ -754,7 +796,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                       min={0}
                       max={16}
                       value={hoursAloneDaily}
-                      onChange={(e) => setHoursAloneDaily(Number(e.target.value))}
+                      onChange={(e) => setHoursAloneDaily(e.target.value === '' ? '' : Number(e.target.value))}
                       className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-teal-500"
                     />
                   </div>
@@ -768,7 +810,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                         <input
                           type="radio"
                           name="hasPets"
-                          checked={hasOtherPets}
+                          checked={hasOtherPets === true}
                           onChange={() => setHasOtherPets(true)}
                         />
                         <span>Yes</span>
@@ -777,12 +819,13 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                         <input
                           type="radio"
                           name="hasPets"
-                          checked={!hasOtherPets}
+                          checked={hasOtherPets === false}
                           onChange={() => setHasOtherPets(false)}
                         />
                         <span>No</span>
                       </label>
                     </div>
+                    <input type="hidden" required value={hasOtherPets === null ? '' : 'selected'} aria-label="Other pets selection" />
                     {hasOtherPets && (
                       <input
                         type="text"
@@ -802,6 +845,7 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                       rows={2}
                       value={petExperience}
                       onChange={(e) => setPetExperience(e.target.value)}
+                      required
                       placeholder="Briefly describe your history caring for animals..."
                       className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-slate-900"
                     />
@@ -815,10 +859,13 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                       rows={2}
                       value={motivation}
                       onChange={(e) => setMotivation(e.target.value)}
+                      required
                       placeholder="Share your lifestyle, family routine, or goals..."
                       className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-slate-900"
                     />
                   </div>
+
+                  {applicationError && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-xs text-rose-800">{applicationError}</p>}
 
                   <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
                     <button

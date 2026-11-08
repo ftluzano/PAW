@@ -5,7 +5,7 @@ import { CheckCircle2, Clock, Calendar, XCircle, Search, Filter, AlertCircle, Ey
 interface AdoptionReviewViewProps {
   applications: AdoptionApplication[];
   animals: Animal[];
-  onUpdateApplication: (app: AdoptionApplication) => void;
+  onUpdateApplication: (app: AdoptionApplication) => Promise<void>;
   onUpdateAnimalStatus: (petId: string, newStatus: AnimalStatus, application?: AdoptionApplication) => void;
 }
 
@@ -38,7 +38,7 @@ export const AdoptionReviewView: React.FC<AdoptionReviewViewProps> = ({
     setMeetDateInput(app.meetAndGreetDate || '');
   };
 
-  const handleDecision = (newStatus: ApplicationStatus) => {
+  const handleDecision = async (newStatus: ApplicationStatus) => {
     if (!selectedApp) return;
 
     const updated: AdoptionApplication = {
@@ -49,7 +49,7 @@ export const AdoptionReviewView: React.FC<AdoptionReviewViewProps> = ({
       reviewedDate: new Date().toISOString().split('T')[0],
     };
 
-    onUpdateApplication(updated);
+    await onUpdateApplication(updated);
 
     // If approved or scheduled meet and greet, update animal's workflow status accordingly!
     if (newStatus === 'Approved') {

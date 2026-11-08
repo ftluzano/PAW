@@ -52,6 +52,23 @@ const toPublicPetPost = (animal: Animal): PublicPetPost => ({
   neuteredSpayed: animal.neuteredSpayed,
 });
 
+const fromPublicPetPost = (post: PublicPetPost): Animal => ({
+  ...post,
+  intakeType: 'Rescued',
+  intakeDate: new Date().toISOString().split('T')[0],
+  intakeLocation: 'PAW adoption program',
+  intakeNotes: '',
+  status: 'Listed for Adoption',
+  healthStatus: 'Healthy / Stable',
+  microchipId: '',
+  medicalHistory: [],
+  illnessIncidents: [],
+  dailyHealthChecks: [],
+  vaccinations: [],
+  treatments: [],
+  careNotes: [],
+});
+
 async function authorizedPostRequest(method: 'POST' | 'DELETE', body?: Record<string, unknown>) {
   const firebaseUser = firebaseAuth?.currentUser;
   if (!firebaseUser) throw new Error('Your admin session expired. Sign in again.');
@@ -65,6 +82,22 @@ async function authorizedPostRequest(method: 'POST' | 'DELETE', body?: Record<st
   });
   const result = await response.json().catch(() => ({})) as { error?: string };
   if (!response.ok) throw new Error(result.error || 'Turso could not save the pet records.');
+  return result;
+}
+
+async function applicationRequest(method: 'GET' | 'POST', body?: Record<string, unknown>) {
+  const firebaseUser = firebaseAuth?.currentUser;
+  if (!firebaseUser) throw new Error('Your sign-in session expired. Sign in again.');
+  const response = await fetch('/api/adoption-applications', {
+    method,
+    headers: {
+      Authorization: `Bearer ${await firebaseUser.getIdToken()}`,
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const result = await response.json().catch(() => ({})) as { error?: string; applications?: AdoptionApplication[] };
+  if (!response.ok) throw new Error(result.error || 'Could not save the adoption application.');
   return result;
 }
 
@@ -131,9 +164,9 @@ export default function App() {
         setAnimals((prev) => prev.filter((animal) => !PUBLIC_POST_STATUSES.has(animal.status)));
       } else if (event.data?.type === 'pet-post-updated' && event.data.post?.id) {
         const updatedPost = event.data.post;
-        setAnimals((prev) => prev.map((animal) =>
-          animal.id === updatedPost.id ? { ...animal, ...updatedPost } : animal
-        ));
+        setAnimals((prev) => prev.some((animal) => animal.id === updatedPost.id)
+          ? prev.map((animal) => animal.id === updatedPost.id ? { ...animal, ...updatedPost } : animal)
+          : [fromPublicPetPost(updatedPost), ...prev]);
       }
     };
 
@@ -179,11 +212,17 @@ export default function App() {
 
         if (!active || !result.initialized) return;
         const postsById = new Map(result.posts.map((post) => [post.id, post]));
-        setAnimals((previous) => previous.flatMap((animal) => {
-          if (!PUBLIC_POST_STATUSES.has(animal.status)) return [animal];
-          const post = postsById.get(animal.id);
-          return post ? [{ ...animal, ...post }] : [];
-        }));
+        setAnimals((previous) => {
+          const knownPostIds = new Set<string>();
+          const merged = previous.flatMap((animal) => {
+            if (!PUBLIC_POST_STATUSES.has(animal.status)) return [animal];
+            const post = postsById.get(animal.id);
+            if (!post) return [];
+            knownPostIds.add(post.id);
+            return [{ ...animal, ...post }];
+          });
+          return [...merged, ...result.posts.filter((post) => !knownPostIds.has(post.id)).map(fromPublicPetPost)];
+        });
       } catch {
         // Keep the last available local view during brief network or database outages.
       } finally {
@@ -196,6 +235,32 @@ export default function App() {
     return () => {
       active = false;
       window.clearInterval(pollTimer);
+    };
+  }, [currentUser?.id, currentUser?.role]);
+
+  useEffect(() => {
+    if (currentUser?.role !== 'admin') return;
+    let active = true;
+    let requestInFlight = false;
+    const loadApplications = async () => {
+      if (requestInFlight) return;
+      requestInFlight = true;
+      try {
+        const result = await applicationRequest('GET');
+        if (active && Array.isArray(result.applications)) {
+          setApplications(result.applications);
+        }
+      } catch {
+        // Keep the demo applications visible if Turso is briefly unavailable.
+      } finally {
+        requestInFlight = false;
+      }
+    };
+    void loadApplications();
+    const applicationPollTimer = window.setInterval(() => void loadApplications(), 3000);
+    return () => {
+      active = false;
+      window.clearInterval(applicationPollTimer);
     };
   }, [currentUser?.id, currentUser?.role]);
 
@@ -233,6 +298,13 @@ export default function App() {
     const post = toPublicPetPost(updatedAnimal);
     await authorizedPostRequest('POST', { action: 'upsert', post });
     handleUpdateAnimal(updatedAnimal);
+    postUpdateChannel.current?.postMessage({ type: 'pet-post-updated', post });
+  };
+
+  const handleCreateAnimalPost = async (newAnimal: Animal) => {
+    const post = toPublicPetPost(newAnimal);
+    await authorizedPostRequest('POST', { action: 'upsert', post });
+    setAnimals((previous) => [newAnimal, ...previous]);
     postUpdateChannel.current?.postMessage({ type: 'pet-post-updated', post });
   };
 
@@ -299,11 +371,13 @@ export default function App() {
   };
 
   // Applications Handlers
-  const handleUpdateApplication = (updatedApp: AdoptionApplication) => {
+  const handleUpdateApplication = async (updatedApp: AdoptionApplication) => {
+    await applicationRequest('POST', { action: 'upsert', application: updatedApp });
     setApplications((prev) => prev.map((app) => (app.id === updatedApp.id ? updatedApp : app)));
   };
 
-  const handleSubmitNewApplication = (newApp: AdoptionApplication) => {
+  const handleSubmitNewApplication = async (newApp: AdoptionApplication) => {
+    await applicationRequest('POST', { action: 'submit', application: newApp });
     setApplications((prev) => [newApp, ...prev]);
     // Also move animal status to 'Application' if not already in later stage
     setAnimals((prev) =>
@@ -400,7 +474,7 @@ export default function App() {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
         <div key={`${currentUser.role}-${activeTab}`} className="app-content">
 
         {isAdmin && (
@@ -410,6 +484,7 @@ export default function App() {
             applications={applications}
             followUps={followUps}
             onUpdateAnimal={handleUpdateAnimalPost}
+            onCreateAnimal={handleCreateAnimalPost}
             onClearPosts={handleClearPublicPosts}
             activeTab={activeTab}
             onSelectTab={setActiveTab}
