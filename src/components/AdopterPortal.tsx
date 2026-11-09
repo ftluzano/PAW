@@ -334,6 +334,8 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                           ? 'bg-blue-50 text-blue-700 border border-blue-200'
                           : app.status === 'Under Review'
                           ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                          : app.status === 'Declined'
+                          ? 'bg-rose-50 text-rose-700 border border-rose-200'
                           : 'bg-slate-100 text-slate-700'
                       }`}
                     >
@@ -356,15 +358,19 @@ export const AdopterPortal: React.FC<AdopterPortalProps> = ({
                         label: 'Meet & Greet',
                         done: app.status === 'Meet & Greet Scheduled' || app.status === 'Approved',
                       },
-                      { label: 'Approved', done: app.status === 'Approved' },
+                      {
+                        label: app.status === 'Declined' ? 'Declined' : 'Approved',
+                        done: app.status === 'Approved' || app.status === 'Declined',
+                        failed: app.status === 'Declined',
+                      },
                     ].map((step, idx) => (
                       <div key={idx} className="space-y-1">
                         <div
                           className={`h-1.5 rounded-full ${
-                            step.done ? 'bg-teal-600' : 'bg-slate-200'
+                            step.failed ? 'bg-rose-600' : step.done ? 'bg-teal-600' : 'bg-slate-200'
                           }`}
                         />
-                        <p className={`text-[11px] font-semibold ${step.done ? 'text-slate-900' : 'text-slate-400'}`}>
+                        <p className={`text-[11px] font-semibold ${step.failed ? 'text-rose-700' : step.done ? 'text-slate-900' : 'text-slate-400'}`}>
                           {step.label}
                         </p>
                       </div>

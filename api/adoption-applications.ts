@@ -75,6 +75,10 @@ function isAdmin(identity: DecodedIdToken): boolean {
   return uidAllowed || emailAllowed || identity.admin === true || identity.role === 'admin';
 }
 
+function isStaff(identity: DecodedIdToken): boolean {
+  return identity.staff === true || identity.role === 'staff';
+}
+
 async function ensureSchema(client: Client): Promise<void> {
   await client.batch([
     'CREATE TABLE IF NOT EXISTS paw_adoption_applications (id TEXT PRIMARY KEY NOT NULL, applicant_id TEXT NOT NULL, payload TEXT NOT NULL, updated_at TEXT NOT NULL)',
@@ -129,6 +133,21 @@ async function readApplications(client: Client): Promise<AdoptionApplication[]> 
   });
 }
 
+async function readApplicantApplications(client: Client, applicantId: string): Promise<AdoptionApplication[]> {
+  const result = await client.execute({
+    sql: 'SELECT payload FROM paw_adoption_applications WHERE applicant_id = ? ORDER BY updated_at DESC',
+    args: [applicantId],
+  });
+  return result.rows.flatMap((row) => {
+    try {
+      const application = validateApplication(JSON.parse(String(row.payload)));
+      return application ? [application] : [];
+    } catch {
+      return [];
+    }
+  });
+}
+
 export default async function handler(request: ApiRequest, response: ApiResponse): Promise<void> {
   try {
     const identity = await getIdentity(request);
@@ -140,7 +159,9 @@ export default async function handler(request: ApiRequest, response: ApiResponse
     if (request.method === 'GET') {
       const state = await client.execute('SELECT records_cleared FROM paw_workspace_state WHERE id = 1');
       return sendJson(response, 200, {
-        applications: isAdmin(identity) ? await readApplications(client) : [],
+        applications: isAdmin(identity) || isStaff(identity)
+          ? await readApplications(client)
+          : await readApplicantApplications(client, identity.uid),
         recordsCleared: Number(state.rows[0]?.records_cleared || 0) === 1,
       });
     }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Animal, AnimalStatus, AdoptionApplication, FollowUpCheckIn, User } from '../types.ts';
-import { Download, Eye, FileText, HeartPulse, PawPrint, Pencil, ShieldAlert, Trash2, Upload, X } from 'lucide-react';
+import { CheckCircle2, Download, Eye, FileText, HeartPulse, PawPrint, Pencil, ShieldAlert, Trash2, Upload, X, XCircle } from 'lucide-react';
 import { WORKFLOW_STAGES } from './WorkflowPipelineBar.tsx';
 
 interface AdminDashboardProps {
@@ -12,6 +12,9 @@ interface AdminDashboardProps {
   onCreateAnimal: (animal: Animal) => Promise<void>;
   onClearPosts: () => Promise<void>;
   onClearAll: () => Promise<void>;
+  onUpdateApplication: (application: AdoptionApplication) => Promise<void>;
+  onUpdateAnimalStatus: (petId: string, status: AnimalStatus, application?: AdoptionApplication) => void;
+  onMoveAnimalStage: (animalId: string, status: AnimalStatus) => void;
   activeTab: string;
   onSelectTab: (tab: string) => void;
 }
@@ -47,6 +50,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onCreateAnimal,
   onClearPosts,
   onClearAll,
+  onUpdateApplication,
+  onUpdateAnimalStatus,
+  onMoveAnimalStage,
   activeTab,
   onSelectTab,
 }) => {
@@ -54,6 +60,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isCreatingPost, setIsCreatingPost] = useState(false);
   const [postError, setPostError] = useState('');
   const [selectedApplication, setSelectedApplication] = useState<AdoptionApplication | null>(null);
+  const [selectedWorkflowStage, setSelectedWorkflowStage] = useState<AnimalStatus | null>(null);
+  const [isSavingApplication, setIsSavingApplication] = useState(false);
   const [isSavingPost, setIsSavingPost] = useState(false);
   const [isClearingPosts, setIsClearingPosts] = useState(false);
   const stageCounts = animals.reduce((counts, animal) => {
@@ -72,6 +80,46 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const publicPosts = animals.filter((animal) =>
     ['Listed for Adoption', 'Application', 'Review & Match'].includes(animal.status)
   );
+  const workflowAnimals = selectedWorkflowStage
+    ? animals.filter((animal) => animal.status === selectedWorkflowStage)
+    : [];
+
+  const handleApplicationDecision = async (status: 'Approved' | 'Declined') => {
+    if (!selectedApplication) return;
+    setIsSavingApplication(true);
+    const updatedApplication = {
+      ...selectedApplication,
+      status: status === 'Approved' ? 'Meet & Greet Scheduled' as const : 'Declined' as const,
+      reviewedDate: new Date().toISOString().split('T')[0],
+    };
+    try {
+      await onUpdateApplication(updatedApplication);
+      onUpdateAnimalStatus(
+        selectedApplication.petId,
+        status === 'Approved' ? 'Review & Match' : 'Listed for Adoption',
+        undefined
+      );
+      setSelectedApplication(updatedApplication);
+    } finally {
+      setIsSavingApplication(false);
+    }
+  };
+
+  const handleOpenApplication = async (application: AdoptionApplication) => {
+    setSelectedApplication(application);
+    if (application.status !== 'Submitted') return;
+    const updatedApplication = {
+      ...application,
+      status: 'Under Review' as const,
+      reviewedDate: new Date().toISOString().split('T')[0],
+    };
+    try {
+      await onUpdateApplication(updatedApplication);
+      setSelectedApplication(updatedApplication);
+    } catch {
+      setSelectedApplication(application);
+    }
+  };
 
   const clearPublicPosts = async () => {
     if (!window.confirm(`Permanently remove all ${publicPosts.length} public pet posts for every user? Medical records and applications will remain.`)) return;
@@ -299,10 +347,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
             <div className="divide-y divide-slate-100">
               {WORKFLOW_STAGES.map((stage) => (
-                <div key={stage.id} className="flex items-center justify-between py-2.5 text-xs">
+                <button
+                  key={stage.id}
+                  type="button"
+                  disabled={!stageCounts[stage.id]}
+                  onClick={() => setSelectedWorkflowStage(stage.id)}
+                  className="flex w-full items-center justify-between py-2.5 text-left text-xs transition-colors hover:bg-slate-50 disabled:cursor-default disabled:hover:bg-transparent"
+                >
                   <span className="text-slate-600">{stage.label}</span>
                   <span className="font-mono font-semibold tabular-nums text-slate-900">{stageCounts[stage.id] || 0}</span>
-                </div>
+                </button>
               ))}
             </div>
           </section>
@@ -320,7 +374,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <button
                     key={application.id}
                     type="button"
-                    onClick={() => setSelectedApplication(application)}
+                    onClick={() => void handleOpenApplication(application)}
                     className="flex w-full items-center justify-between gap-3 py-3 text-left transition-colors hover:bg-slate-50"
                   >
                     <div className="min-w-0">
@@ -410,7 +464,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            <footer className="flex justify-end border-t border-slate-200 bg-slate-50 px-4 py-3">
+            <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3">
+              <button
+                type="button"
+                disabled={isSavingApplication || selectedApplication.status === 'Declined'}
+                onClick={() => void handleApplicationDecision('Declined')}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+                Decline
+              </button>
+              <button
+                type="button"
+                disabled={isSavingApplication || selectedApplication.status === 'Meet & Greet Scheduled' || selectedApplication.status === 'Declined'}
+                onClick={() => void handleApplicationDecision('Approved')}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Accept / schedule Meet & Greet
+              </button>
               <button
                 type="button"
                 onClick={() => setSelectedApplication(null)}
@@ -420,6 +492,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 Close details
               </button>
             </footer>
+          </section>
+        </div>
+      )}
+
+      {selectedWorkflowStage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 backdrop-blur-sm sm:p-4">
+          <section
+            className="flex max-h-[calc(100dvh-1rem)] min-h-0 w-full max-w-xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="workflow-records-title"
+          >
+            <header className="flex items-center justify-between bg-slate-900 px-4 py-3 text-white">
+              <div>
+                <h2 id="workflow-records-title" className="text-sm font-bold">{selectedWorkflowStage}</h2>
+                <p className="text-[11px] text-slate-400">{workflowAnimals.length} record{workflowAnimals.length === 1 ? '' : 's'} in this stage</p>
+              </div>
+              <button type="button" onClick={() => setSelectedWorkflowStage(null)} aria-label="Close workflow records" className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+            <div className="min-h-0 overflow-y-auto divide-y divide-slate-200">
+              {workflowAnimals.map((animal) => (
+                <div key={animal.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-semibold text-slate-900">{animal.name}</p>
+                    <p className="text-xs text-slate-500">{animal.species} · {animal.breed}</p>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                    Move to
+                    <select
+                      value={animal.status}
+                      onChange={(event) => onMoveAnimalStage(animal.id, event.target.value as AnimalStatus)}
+                      className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs font-normal text-slate-900"
+                    >
+                      {WORKFLOW_STAGES.map((stage) => <option key={stage.id} value={stage.id}>{stage.label}</option>)}
+                    </select>
+                  </label>
+                </div>
+              ))}
+            </div>
           </section>
         </div>
       )}

@@ -33,6 +33,9 @@ type PublicPetPostUpdate = {
   type: 'pet-posts-cleared';
 } | {
   type: 'records-cleared';
+} | {
+  type: 'application-updated';
+  application: AdoptionApplication;
 };
 
 const PUBLIC_POST_CHANNEL = 'paw-public-pet-posts';
@@ -168,6 +171,11 @@ export default function App() {
         setAnimals((prev) => prev.filter((animal) => PUBLIC_POST_STATUSES.has(animal.status)));
         setApplications([]);
         setFollowUps([]);
+      } else if (event.data?.type === 'application-updated' && event.data.application?.id) {
+        const updatedApplication = event.data.application;
+        setApplications((previous) => previous.some((application) => application.id === updatedApplication.id)
+          ? previous.map((application) => application.id === updatedApplication.id ? updatedApplication : application)
+          : [updatedApplication, ...previous]);
       } else if (event.data?.type === 'pet-post-updated' && event.data.post?.id) {
         const updatedPost = event.data.post;
         setAnimals((prev) => prev.some((animal) => animal.id === updatedPost.id)
@@ -253,7 +261,7 @@ export default function App() {
       requestInFlight = true;
       try {
         const result = await applicationRequest('GET');
-        if (active && currentUser.role === 'admin' && Array.isArray(result.applications)) {
+        if (active && Array.isArray(result.applications)) {
           setApplications(result.applications);
         }
         if (active && result.recordsCleared) {
@@ -392,11 +400,13 @@ export default function App() {
   const handleUpdateApplication = async (updatedApp: AdoptionApplication) => {
     await applicationRequest('POST', { action: 'upsert', application: updatedApp });
     setApplications((prev) => prev.map((app) => (app.id === updatedApp.id ? updatedApp : app)));
+    postUpdateChannel.current?.postMessage({ type: 'application-updated', application: updatedApp });
   };
 
   const handleSubmitNewApplication = async (newApp: AdoptionApplication) => {
     await applicationRequest('POST', { action: 'submit', application: newApp });
     setApplications((prev) => [newApp, ...prev]);
+    postUpdateChannel.current?.postMessage({ type: 'application-updated', application: newApp });
     // Also move animal status to 'Application' if not already in later stage
     setAnimals((prev) =>
       prev.map((a) => (a.id === newApp.petId && a.status === 'Listed for Adoption' ? { ...a, status: 'Application' } : a))
@@ -505,6 +515,9 @@ export default function App() {
             onCreateAnimal={handleCreateAnimalPost}
             onClearPosts={handleClearPublicPosts}
             onClearAll={handleClearAllRecords}
+            onUpdateApplication={handleUpdateApplication}
+            onUpdateAnimalStatus={handleUpdateAnimalStatus}
+            onMoveAnimalStage={handleMoveAnimalStage}
             activeTab={activeTab}
             onSelectTab={setActiveTab}
           />
