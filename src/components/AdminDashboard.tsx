@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Animal, AnimalStatus, AdoptionApplication, FollowUpCheckIn, User } from '../types.ts';
-import { Download, FileText, HeartPulse, PawPrint, Pencil, ShieldAlert, Trash2, Upload, X } from 'lucide-react';
+import { Download, Eye, FileText, HeartPulse, PawPrint, Pencil, ShieldAlert, Trash2, Upload, X } from 'lucide-react';
 import { WORKFLOW_STAGES } from './WorkflowPipelineBar.tsx';
 
 interface AdminDashboardProps {
@@ -53,6 +53,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [postDraft, setPostDraft] = useState<Animal | null>(null);
   const [isCreatingPost, setIsCreatingPost] = useState(false);
   const [postError, setPostError] = useState('');
+  const [selectedApplication, setSelectedApplication] = useState<AdoptionApplication | null>(null);
   const [isSavingPost, setIsSavingPost] = useState(false);
   const [isClearingPosts, setIsClearingPosts] = useState(false);
   const stageCounts = animals.reduce((counts, animal) => {
@@ -316,7 +317,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             ) : (
               <div className="divide-y divide-slate-100">
                 {pendingApplications.slice(0, 5).map((application) => (
-                  <div key={application.id} className="flex items-center justify-between gap-3 py-3">
+                  <button
+                    key={application.id}
+                    type="button"
+                    onClick={() => setSelectedApplication(application)}
+                    className="flex w-full items-center justify-between gap-3 py-3 text-left transition-colors hover:bg-slate-50"
+                  >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-slate-800">{application.applicantName}</p>
                       <p className="text-xs text-slate-500">For {application.petName}</p>
@@ -324,10 +330,96 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <span className="shrink-0 rounded bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-800">
                       {application.status}
                     </span>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
+          </section>
+        </div>
+      )}
+
+      {selectedApplication && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 backdrop-blur-sm sm:p-4">
+          <section
+            className="flex max-h-[calc(100dvh-1rem)] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="application-details-title"
+          >
+            <header className="flex items-center justify-between bg-slate-900 px-4 py-3 text-white sm:px-5">
+              <div className="min-w-0">
+                <h2 id="application-details-title" className="truncate text-sm font-bold sm:text-base">
+                  Application for {selectedApplication.petName}
+                </h2>
+                <p className="text-[11px] text-slate-400">Submitted {selectedApplication.submissionDate}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedApplication(null)}
+                aria-label="Close application details"
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+
+            <div className="min-h-0 overflow-y-auto p-4 text-xs text-slate-700 sm:p-5">
+              <div className="mb-4 flex items-start justify-between gap-3 border-b border-slate-200 pb-3">
+                <div>
+                  <p className="font-bold text-slate-900">{selectedApplication.applicantName}</p>
+                  <p>{selectedApplication.applicantEmail}</p>
+                  <p>{selectedApplication.applicantPhone}</p>
+                </div>
+                <span className="shrink-0 rounded bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-800">
+                  {selectedApplication.status}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <h3 className="mb-2 font-bold text-slate-900">Household</h3>
+                  <p>Home: {selectedApplication.homeType}</p>
+                  <p>Ownership: {selectedApplication.ownOrRent}</p>
+                  <p>Alone daily: {selectedApplication.hoursAloneDaily} hours</p>
+                  <p>Other pets: {selectedApplication.hasOtherPets ? 'Yes' : 'No'}</p>
+                  {selectedApplication.otherPetsDetails && <p className="mt-1 text-slate-500">{selectedApplication.otherPetsDetails}</p>}
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <h3 className="mb-2 font-bold text-slate-900">Pet request</h3>
+                  <p>{selectedApplication.petName}</p>
+                  <p>Application ID: {selectedApplication.id}</p>
+                  <p>Submitted: {selectedApplication.submissionDate}</p>
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-3">
+                <div>
+                  <h3 className="mb-1 font-bold text-slate-900">Pet care experience</h3>
+                  <p className="rounded-lg border border-slate-200 p-3 leading-relaxed">{selectedApplication.petExperience}</p>
+                </div>
+                <div>
+                  <h3 className="mb-1 font-bold text-slate-900">Adoption motivation</h3>
+                  <p className="rounded-lg border border-slate-200 p-3 leading-relaxed">{selectedApplication.motivation}</p>
+                </div>
+                {selectedApplication.staffNotes && (
+                  <div>
+                    <h3 className="mb-1 font-bold text-slate-900">Staff notes</h3>
+                    <p className="rounded-lg border border-slate-200 bg-amber-50 p-3 leading-relaxed">{selectedApplication.staffNotes}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <footer className="flex justify-end border-t border-slate-200 bg-slate-50 px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setSelectedApplication(null)}
+                className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Close details
+              </button>
+            </footer>
           </section>
         </div>
       )}
